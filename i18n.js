@@ -14,6 +14,13 @@ window.I18N = {
     nearbyLocating: '⏳ מאתר…',
     nearbyDone: '📍 קרוב אליי ✓',
 
+    tabItinerary: 'מסלול',
+    tabPlans: 'תכנית',
+    tabAttractions: 'אטרקציות',
+
+    planWeatherTitle: '🌦️ ניהול לפי מזג אוויר',
+    planDaysTitle: '🗓️ יום-יום',
+
     weatherAll: 'הכול',
     weatherSun: '☀️ שמש',
     weatherRain: '🌧️ גשם',
@@ -45,6 +52,11 @@ window.I18N = {
     navigateAirport: 'נווט לשדה התעופה',
     navigate: 'נווט',
     navigateMaps: 'נווט עם Google Maps',
+    showOnMap: 'הצג במפה',
+    favAdd: 'למועדפים',
+    favOn: 'מועדף',
+    doneAdd: 'סמן כבוצע',
+    doneOn: 'בוצע',
 
     stopoverIdeas: 'רעיונות לעצירה בדרך ({n})',
     today: 'היום',

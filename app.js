@@ -30,6 +30,8 @@
     minRank: 1,
     position: null,        // { lat, lng, at } — last known GPS fix
     locating: false,
+    favorites: new Set(),  // attraction ids marked ⭐
+    done: new Set(),       // attraction ids marked ✅
   };
 
   // Filters survive a page reload; the GPS fix does too, so reopening the app
@@ -44,6 +46,8 @@
         region: state.region,
         minRank: state.minRank,
         position: state.position,
+        favorites: [...state.favorites],
+        done: [...state.done],
       }));
     } catch (_) { /* private browsing — filters just won't persist */ }
   };
@@ -61,6 +65,8 @@
       if (raw.position && Date.now() - raw.position.at < 6 * 60 * 60 * 1000) {
         state.position = raw.position;
       }
+      if (Array.isArray(raw.favorites)) state.favorites = new Set(raw.favorites);
+      if (Array.isArray(raw.done)) state.done = new Set(raw.done);
     } catch (_) { /* ignore corrupt state */ }
   };
 
@@ -68,6 +74,7 @@
   const CAT = new Map(D.categories.map((c) => [c.id, c]));
   const REGION = new Map(D.regions.map((r) => [r.id, r]));
   const PRIO = new Map(D.priorities.map((p) => [p.id, p]));
+  const ATTR = new Map(D.attractions.map((a) => [a.id, a]));
 
   const rankOf = (item) => PRIO.get(item.priority)?.rank ?? 0;
 
@@ -75,12 +82,24 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  /** Google Maps directions URL. Prefers navQuery (name search beats a pin
-   *  for restaurants/hotels), falls back to raw coordinates. */
-  const navUrl = (t) => {
-    const dest = t.navQuery || (t.coords ? `${t.coords.lat},${t.coords.lng}` : t.name || t.address);
-    return `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(dest)}`;
-  };
+  /** Destination string for map links. Prefers navQuery (a name search beats a
+   *  pin for restaurants/hotels), falls back to coordinates, then name/address. */
+  const destStr = (t) =>
+    t.navQuery || (t.coords ? `${t.coords.lat},${t.coords.lng}` : (t.name || t.address || ''));
+
+  // Google Maps driving directions.
+  const navUrl = (t) =>
+    `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(destStr(t))}`;
+  // Google Maps — show the place (view/search, no directions).
+  const mapUrl = (t) =>
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destStr(t))}`;
+  // Waze — coordinates are most reliable; fall back to a text query.
+  const wazeUrl = (t) =>
+    t.coords ? `https://waze.com/ul?ll=${t.coords.lat},${t.coords.lng}&navigate=yes`
+      : `https://waze.com/ul?q=${encodeURIComponent(destStr(t))}&navigate=yes`;
+  // Apple Maps driving directions.
+  const appleUrl = (t) =>
+    `https://maps.apple.com/?daddr=${encodeURIComponent(destStr(t))}&dirflg=d`;
 
   /** Great-circle distance in km. */
   const haversine = (a, b) => {
@@ -131,10 +150,41 @@
   };
 
   /* ---------------- shared card bits ---------------- */
-  const navBtn = (target, label = T.navigateMaps, size = 'full') =>
-    `<a href="${navUrl(target)}" target="_blank" rel="noopener"
-        class="${size === 'full' ? 'flex w-full' : 'inline-flex'} items-center justify-center gap-1.5 rounded-xl bg-ink px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.98] transition">
-        <span>🧭</span><span>${esc(label)}</span></a>`;
+  // A single navigation control: a "נווט" button that expands to Waze / Google /
+  // Apple directions plus "show on map". Used on every place across the app.
+  const navOpt = (href, label) =>
+    `<a href="${href}" target="_blank" rel="noopener"
+        class="flex items-center justify-center gap-1 rounded-lg bg-slate-100 px-2 py-2 text-slate-700 active:scale-95 transition">${label}</a>`;
+
+  const navBlock = (t, label = T.navigate, size = 'full') => `
+    <details class="nav-menu ${size === 'full' ? 'block' : 'inline-block'}">
+      <summary class="flex ${size === 'full' ? 'w-full' : ''} items-center justify-center gap-1.5 rounded-xl bg-ink px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.98] transition">
+        <span>🧭</span><span>${esc(label)}</span>
+      </summary>
+      <div class="mt-2 grid grid-cols-2 gap-1.5 text-[12px] font-semibold">
+        ${navOpt(wazeUrl(t), '🚗 Waze')}
+        ${navOpt(navUrl(t), '🗺️ Google')}
+        ${navOpt(appleUrl(t), '🍎 Apple')}
+        ${navOpt(mapUrl(t), `📍 ${esc(T.showOnMap)}`)}
+      </div>
+    </details>`;
+
+  // Favorite / Done toggle buttons. Kept as builders so a tap can repaint one
+  // card in place (see paintCardState) without re-rendering the whole list.
+  const favBtnHtml = (id) => {
+    const on = state.favorites.has(id);
+    return `<button data-fav="${id}" type="button" aria-pressed="${on}"
+      class="flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition ${
+        on ? 'bg-amber-100 text-amber-800 ring-amber-200' : 'bg-white text-slate-500 ring-slate-200'}">${
+        on ? `⭐ ${esc(T.favOn)}` : `☆ ${esc(T.favAdd)}`}</button>`;
+  };
+  const doneBtnHtml = (id) => {
+    const on = state.done.has(id);
+    return `<button data-done="${id}" type="button" aria-pressed="${on}"
+      class="flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition ${
+        on ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : 'bg-white text-slate-500 ring-slate-200'}">${
+        on ? `✅ ${esc(T.doneOn)}` : `○ ${esc(T.doneAdd)}`}</button>`;
+  };
 
   const chip = (text, cls = 'bg-slate-100 text-slate-600 ring-slate-200') =>
     `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${cls}">${text}</span>`;
@@ -169,7 +219,7 @@
           </div>
         </div>
         ${f.notes ? `<p class="mt-3 rounded-xl bg-slate-50 p-2.5 text-xs leading-relaxed text-slate-600">${esc(f.notes)}</p>` : ''}
-        <div class="mt-3">${navBtn(f, T.navigateAirport)}</div>
+        <div class="mt-3">${navBlock(f, T.navigateAirport)}</div>
       </article>`).join('');
 
     /* --- car rental --- */
@@ -181,7 +231,7 @@
         <p class="text-sm text-slate-500">${esc(fmtDate(leg.date))} · <span class="font-medium tabular-nums" dir="ltr">${esc(leg.time)}</span></p>
         <p class="mt-1 text-xs text-slate-500" dir="ltr">${esc(leg.address)}</p>
         ${leg.notes ? `<p class="mt-2 rounded-xl bg-slate-50 p-2.5 text-xs leading-relaxed text-slate-600">${esc(leg.notes)}</p>` : ''}
-        <div class="mt-3">${navBtn(leg, T.navigateHere)}</div>
+        <div class="mt-3">${navBlock(leg, T.navigateHere)}</div>
       </div>`;
 
     /* --- accommodation --- */
@@ -220,9 +270,9 @@
           <p class="mt-2 text-xs text-slate-500" dir="ltr">📍 ${esc(h.address)}</p>
           <p class="text-xs text-slate-500">🌙 ${h.nights === 1 ? T.nightsOne : fmt('nights', { n: h.nights })}</p>
           ${h.notes ? `<p class="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900">${esc(h.notes)}</p>` : ''}
-          <div class="mt-3 flex gap-2">
-            ${navBtn(h, T.navigateHere)}
-            ${h.phone ? `<a href="tel:${esc(h.phone)}" class="inline-flex shrink-0 items-center rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-semibold">📞</a>` : ''}
+          <div class="mt-3 space-y-2">
+            ${navBlock(h, T.navigateHere)}
+            ${h.phone ? `<a href="tel:${esc(h.phone)}" class="flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-semibold">📞 ${esc(h.phone)}</a>` : ''}
           </div>
         </article>`;
     }).join('');
@@ -241,7 +291,7 @@
           </div>
           <p class="mt-0.5 text-[11px] font-medium text-emerald-700">↩ ${esc(s.detour)}</p>
           <p class="mt-1.5 text-xs leading-relaxed text-slate-600">${esc(s.why)}</p>
-          <div class="mt-2">${navBtn(s, T.navigate, 'inline')}</div>
+          <div class="mt-2">${navBlock(s, T.navigate, 'inline')}</div>
         </li>`).join('');
 
       return `
@@ -290,7 +340,59 @@
     </div>`;
 
   /* ================================================================
-   *  TAB 2 — ATTRACTION BANK
+   *  TAB 2 — READY-MADE DAY PLANS
+   * ================================================================ */
+  function renderPlans() {
+    const P = D.plans;
+    if (!P) { $('#view-plans').innerHTML = ''; return; }
+    const t = today();
+
+    const legend = P.weatherLegend.map((w) => `
+      <div class="flex items-start gap-2 text-xs">
+        <span class="text-base leading-none">${w.icon}</span>
+        <div><span class="font-semibold">${esc(w.when)}</span> — <span class="text-slate-600">${esc(w.ideas)}</span></div>
+      </div>`).join('');
+
+    const days = P.days.map((d) => {
+      const isToday = daysBetween(t, parseDate(d.date)) === 0;
+      const steps = d.steps.map((s) => {
+        // A step links either to an attraction (by id) or a free nav target.
+        const linked = s.ref ? ATTR.get(s.ref) : null;
+        const navTarget = linked || s.nav || null;
+        const navName = linked ? linked.name : (s.nav ? s.nav.name : T.navigate);
+        return `
+          <li class="flex gap-2">
+            <span class="shrink-0 w-14 pt-0.5 text-[11px] font-semibold text-slate-400 tabular-nums">${esc(s.when || '')}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm leading-relaxed text-slate-700">${esc(s.text)}</p>
+              ${navTarget ? `<div class="mt-1">${navBlock(navTarget, navName, 'inline')}</div>` : ''}
+            </div>
+          </li>`;
+      }).join('');
+
+      return `
+        <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ${isToday ? 'ring-emerald-300' : 'ring-transparent'}">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            ${esc(fmtDate(d.date))}${isToday ? ` · ${T.today}` : ''} · ${esc(d.base)}
+          </p>
+          <h3 class="font-bold leading-tight">${esc(d.title)}</h3>
+          <ul class="mt-3 space-y-2">${steps}</ul>
+          ${d.note ? `<p class="mt-3 rounded-xl bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900">${esc(d.note)}</p>` : ''}
+        </article>`;
+    }).join('');
+
+    $('#view-plans').innerHTML = `
+      ${section(T.planWeatherTitle,
+        `<div class="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
+           <p class="text-xs leading-relaxed text-slate-600">${esc(P.intro)}</p>
+           ${legend}
+         </div>`)}
+      ${section(T.planDaysTitle, `<div class="space-y-3">${days}</div>`)}
+    `;
+  }
+
+  /* ================================================================
+   *  TAB 3 — ATTRACTION BANK
    * ================================================================ */
   function buildFilterRails() {
     // categories
@@ -379,15 +481,17 @@
   function attractionCard({ item: a, distKm }) {
     const cat = CAT.get(a.category);
     const prio = PRIO.get(a.priority);
+    const isFav = state.favorites.has(a.id);
+    const isDone = state.done.has(a.id);
     const tags = (a.tags || []).slice(0, 4)
       .map((t) => `<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">${esc(trTag(t))}</span>`)
       .join('');
 
     return `
-      <article class="fade-in rounded-2xl bg-white p-4 shadow-sm">
+      <article data-id="${a.id}" class="fade-in rounded-2xl bg-white p-4 shadow-sm ring-1 ${isFav ? 'ring-amber-300' : 'ring-transparent'} ${isDone ? 'opacity-60' : ''}">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <h3 class="font-bold leading-tight">${esc(a.name)}</h3>
+            <h3 class="font-bold leading-tight">${isFav ? '⭐ ' : ''}${esc(a.name)}</h3>
             ${latinSub(a.nameLatin)}
           </div>
           ${distKm != null
@@ -405,8 +509,32 @@
         <p class="mt-2.5 text-sm leading-relaxed text-slate-600">${esc(a.description)}</p>
         ${a.travelNote ? `<p class="mt-1.5 text-xs font-medium text-slate-500">🚗 ${esc(a.travelNote)}</p>` : ''}
         ${tags ? `<div class="mt-2 flex flex-wrap gap-1">${tags}</div>` : ''}
-        <div class="mt-3">${navBtn(a)}</div>
+        <div class="mt-3 space-y-2">
+          ${navBlock(a)}
+          <div class="flex gap-1.5">
+            ${favBtnHtml(a.id)}
+            ${doneBtnHtml(a.id)}
+          </div>
+        </div>
       </article>`;
+  }
+
+  /** Repaint a single card's favorite/done state in place, so a tap doesn't
+   *  re-render (and collapse) the whole list. */
+  function paintCardState(id) {
+    const art = document.querySelector(`#attraction-list [data-id="${id}"]`);
+    if (!art) return;
+    const isFav = state.favorites.has(id);
+    const isDone = state.done.has(id);
+    const favBtn = art.querySelector('[data-fav]');
+    const doneBtn = art.querySelector('[data-done]');
+    if (favBtn) favBtn.outerHTML = favBtnHtml(id);
+    if (doneBtn) doneBtn.outerHTML = doneBtnHtml(id);
+    const h3 = art.querySelector('h3');
+    if (h3) h3.innerHTML = `${isFav ? '⭐ ' : ''}${esc(ATTR.get(id)?.name ?? '')}`;
+    art.classList.toggle('opacity-60', isDone);
+    art.classList.toggle('ring-amber-300', isFav);
+    art.classList.toggle('ring-transparent', !isFav);
   }
 
   function renderAttractions() {
@@ -491,6 +619,7 @@
   function setTab(tab) {
     state.tab = tab;
     $('#view-itinerary').hidden = tab !== 'itinerary';
+    $('#view-plans').hidden = tab !== 'plans';
     $('#view-attractions').hidden = tab !== 'attractions';
     document.querySelectorAll('.tab-btn').forEach((b) => {
       const on = b.dataset.tab === tab;
@@ -541,6 +670,22 @@
       renderAttractions(); persist();
     });
 
+    // Favorite / Done toggles (delegated). Repaint just the tapped card so open
+    // navigation menus on other cards aren't disturbed.
+    $('#attraction-list').addEventListener('click', (e) => {
+      const favBtn = e.target.closest('[data-fav]');
+      const doneBtn = e.target.closest('[data-done]');
+      if (favBtn) {
+        const id = favBtn.dataset.fav;
+        state.favorites.has(id) ? state.favorites.delete(id) : state.favorites.add(id);
+        paintCardState(id); persist();
+      } else if (doneBtn) {
+        const id = doneBtn.dataset.done;
+        state.done.has(id) ? state.done.delete(id) : state.done.add(id);
+        paintCardState(id); persist();
+      }
+    });
+
     $('#btn-nearby').addEventListener('click', findNearby);
 
     $('#btn-reset').addEventListener('click', () => {
@@ -557,6 +702,7 @@
   restore();
   renderHeader();
   renderItinerary();
+  renderPlans();
   buildFilterRails();
   paintFilterState();
   renderAttractions();
