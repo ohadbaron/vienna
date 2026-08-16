@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="עוזר טיול בזמן אמת לחופשה משפחתית באוסטריה — מסלול, לינה ובנק אטרקציות עם חיפוש ומיקום GPS.">
+<title>אוסטריה 2026 — עוזר הטיול</title>
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏔️</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: { ink: '#0f172a' },
+        fontFamily: { sans: ['-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'] }
+      }
+    }
+  }
+</script>
+
+<style>
+  /* Respect the iPhone home-bar / notch */
+  .safe-b { padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)); }
+  .safe-t { padding-top: env(safe-area-inset-top); }
+
+  /* Horizontal filter rails: swipeable, no visible scrollbar */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Native-feeling momentum + snap on the chip rails */
+  .rail { scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .rail > * { scroll-snap-align: start; }
+
+  /* Prevent iOS zoom-on-focus (needs >=16px) */
+  input, select, textarea { font-size: 16px; }
+
+  /* Filter bar sticks right under the header; --hdr is measured in app.js */
+  .stick-below-hdr { position: sticky; top: var(--hdr, 60px); }
+
+  details > summary { list-style: none; cursor: pointer; }  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(180deg); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .fade-in { animation: fade .25s ease-out both; }
+    @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+</head>
+
+<body class="h-full bg-slate-100 text-ink antialiased">
+
+<!-- ============ HEADER ============ -->
+<header class="safe-t sticky top-0 z-30 bg-ink text-white shadow-lg">
+  <div class="px-4 pt-3 pb-3 flex items-center gap-3">
+    <div class="text-2xl leading-none">🏔️</div>
+    <div class="min-w-0 flex-1">
+      <h1 id="trip-title" class="text-base font-semibold leading-tight truncate">אוסטריה 2026</h1>
+      <p id="trip-dates" class="text-[11px] text-slate-300 leading-tight truncate"></p>
+    </div>
+    <div id="trip-status" class="text-right text-[11px] text-slate-300 leading-tight shrink-0"></div>
+  </div>
+</header>
+
+<!-- ============ MAIN ============ -->
+<main class="mx-auto w-full max-w-2xl px-3 pb-28 pt-3">
+
+  <!-- ---------- TAB 1: ITINERARY ---------- -->
+  <section id="view-itinerary" class="space-y-6"></section>
+
+  <!-- ---------- TAB 2: ATTRACTION BANK ---------- -->
+  <section id="view-attractions" class="space-y-3" hidden>
+
+    <!-- search + geo -->
+    <div class="stick-below-hdr z-20 -mx-3 bg-slate-100/95 px-3 pt-1 pb-2 backdrop-blur">
+      <div class="flex gap-2">
+        <div class="relative flex-1">
+          <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔎</span>
+          <input id="search" type="search" inputmode="search" autocomplete="off"
+                 placeholder="חיפוש אטרקציות, אוכל, תגיות…"
+                 class="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 shadow-sm outline-none focus:border-ink focus:ring-2 focus:ring-ink/20">
+        </div>
+        <button id="btn-nearby" type="button"
+                class="shrink-0 rounded-xl bg-ink px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-95 transition">
+          <span id="nearby-label">📍 קרוב אליי</span>
+        </button>
+      </div>
+
+      <!-- category rail -->
+      <div id="cat-rail" class="rail no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-0.5"></div>
+
+      <!-- secondary filters -->
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <div id="weather-rail" class="flex gap-1 rounded-lg bg-slate-200 p-0.5"></div>
+        <div id="region-rail" class="flex gap-1 rounded-lg bg-slate-200 p-0.5"></div>
+        <select id="priority"
+                class="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm outline-none focus:border-ink">
+          <option value="1">כל העדיפויות</option>
+          <option value="2">גבוהה וחובה</option>
+          <option value="3">חובה בלבד</option>
+        </select>
+        <button id="btn-reset" type="button"
+                class="ml-auto rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 underline-offset-2 hover:underline">
+          איפוס
+        </button>
+      </div>
+    </div>
+
+    <!-- status line -->
+    <p id="results-status" class="px-1 text-xs text-slate-500" aria-live="polite"></p>
+
+    <!-- cards -->
+    <div id="attraction-list" class="space-y-3"></div>
+    <p id="empty-state" class="hidden rounded-2xl bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+      אין מקומות שמתאימים לסינון הזה.<br>נסו להרחיב את מזג האוויר או העדיפות.
+    </p>
+  </section>
+
+  <p id="data-note" class="mt-6 px-2 text-center text-[11px] leading-relaxed text-slate-400"></p>
+</main>
+
+<!-- ============ BOTTOM NAV ============ -->
+<nav class="safe-b fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pt-1.5 backdrop-blur">
+  <div class="mx-auto flex max-w-2xl">
+    <button data-tab="itinerary" type="button"
+            class="tab-btn flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium text-slate-400 transition">
+      <span class="text-xl leading-none">🧭</span><span>מסלול</span>
+    </button>
+    <button data-tab="attractions" type="button"
+            class="tab-btn flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium text-slate-400 transition">
+      <span class="text-xl leading-none">📍</span><span>אטרקציות</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ============ TOAST ============ -->
+<div id="toast" class="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-6 opacity-0 transition-opacity duration-300">
+  <div id="toast-msg" class="max-w-sm rounded-xl bg-ink/95 px-4 py-2.5 text-center text-sm text-white shadow-xl"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
