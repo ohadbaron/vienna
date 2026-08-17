@@ -301,6 +301,7 @@ window.TRIP_DATA = {
       id: "co-lucky-flitzer",
       name: "מגלשת ההרים לאקי פליצר, פלאכאו",
       nameLatin: "Lucky Flitzer Alpine Coaster, Flachau",
+      website: "https://www.lucky-flitzer.at",
       category: "coaster",
       region: "salzburgerland",
       coords: { lat: 47.3457, lng: 13.3877 },
@@ -316,6 +317,7 @@ window.TRIP_DATA = {
       id: "co-rittisberg",
       name: "מגלשת ריטיסברג, רמזאו אם דכשטיין",
       nameLatin: "Rittisberg Coaster, Ramsau am Dachstein",
+      website: "https://www.rittisberg.at",
       category: "coaster",
       region: "salzburgerland",
       coords: { lat: 47.4083, lng: 13.6427 },
@@ -329,6 +331,7 @@ window.TRIP_DATA = {
     },
     {
       id: "co-karkogel",
+      website: "https://karkogel.abtenau-info.at/en/",
       name: "מגלשת קרקוגל, אבטנאו",
       nameLatin: "Sommerrodelbahn Karkogel, Abtenau",
       category: "coaster",
@@ -343,22 +346,8 @@ window.TRIP_DATA = {
       tags: ["kids", "chairlift"],
     },
     {
-      id: "co-grafenberg",
-      name: "וגראיניס גרפנברג (פליינג פוקס ומסלולים)",
-      nameLatin: "Wagrainis Grafenberg (Flying Fox & trails)",
-      category: "coaster",
-      region: "salzburgerland",
-      coords: { lat: 47.3336, lng: 13.2986 },
-      priority: "high",
-      duration: "half day",
-      weather: "sun",
-      travelNote: "~15 דק׳ מאלטנמרקט",
-      description:
-        "רכבלית אל הר שלם של אטרקציות משפחתיות: פליינג פוקס, אזור משחקי מים, מסלולים נושאיים ועגלות הרים. לא בדיוק מגלשת הרים, אבל אותה אנרגיה וקרוב מאוד.",
-      tags: ["kids", "gondola", "closest"],
-    },
-    {
       id: "co-nocky",
+      website: "https://www.nocky.at/",
       name: "נוקי פליצר, טוראכר הֵה",
       nameLatin: "Nocky Flitzer, Turracher Höhe",
       category: "coaster",
@@ -374,6 +363,7 @@ window.TRIP_DATA = {
     },
     {
       id: "co-planai",
+      website: "https://www.planai.at/en",
       name: "פלנאי הופסילנד ורכבלי הקיץ, שלאדמינג",
       nameLatin: "Planai Hopsiland & summer lifts, Schladming",
       category: "coaster",
@@ -389,6 +379,7 @@ window.TRIP_DATA = {
     },
     {
       id: "co-geisterberg",
+      website: "https://www.snow-space.com/en/summer/mountains/geisterberg/",
       name: "הר הרוחות גייסטרברג, סנט יוהאן (אלפנדורף)",
       nameLatin: "Geisterberg, St. Johann im Pongau (Alpendorf)",
       category: "coaster",
@@ -405,6 +396,7 @@ window.TRIP_DATA = {
     },
     {
       id: "co-fantasiana",
+      website: "https://www.erlebnispark.at/",
       name: "פארק השעשועים פנטזיאנה, שטרסוואלכן",
       nameLatin: "Fantasiana Erlebnispark Straßwalchen",
       category: "coaster",
@@ -423,6 +415,7 @@ window.TRIP_DATA = {
       id: "co-erlebniswald",
       name: "פארק החבלים ביער, אלטנמרקט",
       nameLatin: "Erlebniswald Altenmarkt (forest rope park)",
+      website: "https://www.erlebniswald-altenmarkt.at",
       category: "coaster",
       region: "salzburgerland",
       coords: { lat: 47.3725, lng: 13.4165 },
@@ -437,6 +430,7 @@ window.TRIP_DATA = {
     },
     {
       id: "co-flori",
+      website: "https://www.flachau.com/de/sommer/wandern/floris-erlebnispfad.html",
       name: "שביל החוויה של פלורי, פלאכאו",
       nameLatin: "Flori's Erlebnispfad, Flachau",
       category: "coaster",
@@ -457,6 +451,7 @@ window.TRIP_DATA = {
       id: "wa-therme-amade",
       name: "טרמה אמדה, אלטנמרקט",
       nameLatin: "Erlebnis-Therme Amadé, Altenmarkt",
+      website: "https://www.thermeamade.at",
       category: "water",
       region: "salzburgerland",
       coords: { lat: 47.3752, lng: 13.42 },
@@ -470,21 +465,57 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-alpentherme",
+      website: "https://www.alpentherme.com/",
       name: "אלפנטרמה גשטיין, בד הופגשטיין",
       nameLatin: "Alpentherme Gastein, Bad Hofgastein",
       category: "water",
       region: "salzburgerland",
       coords: { lat: 47.1683, lng: 13.0983 },
-      priority: "high",
+      priority: "must",
+      duration: "half day",
+      weather: "rain",
+      travelNote: "~45 דק׳ מאלטנמרקט · עמק גאשטיין",
+      description:
+        "מתחם מרחצאות ענק וחדשני עם מים תרמיים טבעיים (36–46°C), מחולק לעולמות: Relax World (בריכות חמות ושקטות מול הנוף), Family World (מגלשות ואקווריום ענק לשחות לצדו) ואגמי שחייה טבעיים במי מעיינות חמים. שווה את הנסיעה אם אמדה קטנה או עמוסה.",
+      tags: ["rainy day", "kids", "indoor", "thermal"],
+    },
+    {
+      id: "wa-felsentherme",
+      website: "https://www.felsentherme.com/en/",
+      name: "פלזנטרמה, באד גאשטיין",
+      nameLatin: "Felsentherme, Bad Gastein",
+      category: "water",
+      region: "salzburgerland",
+      coords: { lat: 47.1149, lng: 13.1386 },
+      navQuery: "Felsentherme Gastein, Bad Gastein, Austria",
+      priority: "must",
+      duration: "half day",
+      weather: "rain",
+      travelNote: "~50 דק׳ מאלטנמרקט · עמק גאשטיין",
+      description:
+        "המרחצאות החמים הוותיקים והמפורסמים באזור, בנויים ממש בתוך סלע ההר בגובה 1,100 מ׳. בריכות חמות פתוחות תחת כיפת השמיים מול הפסגות, מערת סלע ומים טבעיים לחלוטין.",
+      tags: ["rainy day", "thermal", "view", "indoor"],
+    },
+    {
+      id: "wa-tauern-spa",
+      website: "https://www.tauernspakaprun.com/en",
+      name: "טאוורן ספא, קפרון",
+      nameLatin: "Tauern Spa Zell am See – Kaprun",
+      category: "water",
+      region: "salzburgerland",
+      coords: { lat: 47.2668, lng: 12.7561 },
+      navQuery: "Tauern Spa Zell am See-Kaprun, Austria",
+      priority: "must",
       duration: "half day",
       weather: "rain",
       travelNote: "~50 דק׳ מאלטנמרקט",
       description:
-        "מתחם תרמי גדול בהרבה עם עולם משפחתי ייעודי, בריכת גלים ולגונה תרמית חיצונית. שווה את הנסיעה אם אמדה מרגישה קטנה או עמוסה.",
-      tags: ["rainy day", "kids", "indoor", "thermal"],
+        "אחד ממתחמי הספא והמרחצאות היוקרתיים באירופה: בריכות פנימיות וחיצוניות מחוממות עם תצפית פנורמית לקרחון ולאלפים, ומתחם מים נפרד ומחומם לילדים — כך שהמבוגרים נהנים משקט מוחלט.",
+      tags: ["thermal", "kids", "view", "indoor"],
     },
     {
       id: "wa-aqua-salza",
+      website: "https://www.aqua-salza.at/",
       name: "אקווה סלצה, גולינג",
       nameLatin: "Aqua Salza, Golling",
       category: "water",
@@ -500,6 +531,7 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-zauchensee",
+      website: "https://www.zauchensee.at/de/sommer/sommer.html",
       name: "אגם צאוכנזה וגמסקוגל",
       nameLatin: "Zauchensee lake & Gamskogel",
       category: "water",
@@ -515,6 +547,7 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-jaegersee",
+      website: "https://www.kleinarl.info/en/summer/jaegersee",
       name: "אגם יגרזה, קליינארל",
       nameLatin: "Jägersee, Kleinarl",
       category: "water",
@@ -530,6 +563,7 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-wolfgangsee",
+      website: "https://wolfgangsee.salzkammergut.at/en/",
       name: "אגם וולפגנגזה בסנט גילגן",
       nameLatin: "Wolfgangsee at St. Gilgen",
       category: "water",
@@ -545,6 +579,7 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-freibad-radstadt",
+      website: "https://www.radstadt.com/en/summer/experience/freizeitbad-radstadt/",
       name: "בריכה חיצונית פרייבאד, רדשטאדט",
       nameLatin: "Freibad Radstadt (outdoor pool)",
       category: "water",
@@ -560,6 +595,7 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-donauinsel",
+      website: "https://www.wien.gv.at/english/leisure/donauinsel/",
       name: "חוף קופה / דונאואינזל, וינה",
       nameLatin: "Copa Beach / Donauinsel, Vienna",
       category: "water",
@@ -575,6 +611,7 @@ window.TRIP_DATA = {
     },
     {
       id: "wa-gaensehaeufel",
+      website: "https://www.wien.gv.at/freizeit/baeder/uebersicht/baeder-ausserhalb-des-guertels/gaensehaeufel.html",
       name: "אי הרחצה גנזהויפל, וינה",
       nameLatin: "Gänsehäufel bathing island, Vienna",
       category: "water",
@@ -594,6 +631,7 @@ window.TRIP_DATA = {
       id: "na-liechtensteinklamm",
       name: "קניון ליכטנשטיין, סנט יוהאן אים פונגאו",
       nameLatin: "Liechtensteinklamm, St. Johann im Pongau",
+      website: "https://www.liechtensteinklamm.at",
       category: "nature",
       region: "salzburgerland",
       coords: { lat: 47.3164, lng: 13.2011 },
@@ -607,6 +645,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-eisriesenwelt",
+      website: "https://www.eisriesenwelt.at/en/",
       name: "מערת הקרח אייסריזנוולט, וורפן",
       nameLatin: "Eisriesenwelt Ice Cave, Werfen",
       category: "nature",
@@ -622,6 +661,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-lammerklamm",
+      website: "https://www.lammerklamm.at/",
       name: "קניון לאמרקלאם (לאמרפן), שפאו",
       nameLatin: "Lammerklamm (Lammeröfen), Scheffau",
       category: "nature",
@@ -637,6 +677,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-gollinger-wasserfall",
+      website: "https://www.golling.info/en/gollinger-waterfall/",
       name: "מפל גולינג",
       nameLatin: "Gollinger Wasserfall",
       category: "nature",
@@ -652,6 +693,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-silberkarklamm",
+      website: "https://www.silberkarklamm.at/",
       name: "קניון זילברקאר, רמזאו אם דכשטיין",
       nameLatin: "Silberkarklamm, Ramsau am Dachstein",
       category: "nature",
@@ -667,6 +709,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-talbachklamm",
+      website: "https://www.schladming-dachstein.at/en/activities/hiking/hiking-tours/talbachklamm.html",
       name: "קניון טלבאך, שלאדמינג",
       nameLatin: "Talbachklamm, Schladming",
       category: "nature",
@@ -682,6 +725,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-kitzlochklamm",
+      website: "https://www.kitzlochklamm.at/",
       name: "קניון קיצלוך, טקסנבאך",
       nameLatin: "Kitzlochklamm, Taxenbach",
       category: "nature",
@@ -697,6 +741,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-krimml",
+      website: "https://www.wasserfaelle-krimml.at/en/",
       name: "מפלי קרימל",
       nameLatin: "Krimml Waterfalls",
       category: "nature",
@@ -712,6 +757,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-grossglockner",
+      website: "https://www.grossglockner.at/de/die-hochalpenstrasse",
       name: "כביש ההרים גרוסגלוקנר",
       nameLatin: "Grossglockner High Alpine Road",
       category: "nature",
@@ -727,6 +773,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-krippenstein",
+      website: "https://www.dachstein-salzkammergut.com/en/summer/experience/dachstein-krippenstein/",
       name: "דכשטיין קריפנשטיין ו-5fingers",
       nameLatin: "Dachstein Krippenstein & 5fingers",
       category: "nature",
@@ -742,6 +789,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-dachstein-skywalk",
+      website: "https://www.dachstein-salzkammergut.com/en/summer/experience/dachstein-skywalk/",
       name: "דכשטיין סקיווק וארמון הקרח",
       nameLatin: "Dachstein Glacier Skywalk & Ice Palace",
       category: "nature",
@@ -757,6 +805,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-hallstatt",
+      website: "https://www.hallstatt.net/",
       name: "הכפר והאגם הלשטאט",
       nameLatin: "Hallstatt village & lake",
       category: "nature",
@@ -772,6 +821,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-filzmoos-almen",
+      website: "https://www.filzmoos.at/en/summer/hiking/",
       name: "אוברהופאלם ואונטרהופאלם, פילצמוס",
       nameLatin: "Oberhofalm & Unterhofalm, Filzmoos",
       category: "nature",
@@ -787,6 +837,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-untersberg",
+      website: "https://www.untersbergbahn.at/en/",
       name: "רכבל אונטרסברג, גרֵדיג",
       nameLatin: "Untersbergbahn cable car, Grödig",
       category: "nature",
@@ -802,6 +853,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-lainzer",
+      website: "https://www.wien.gv.at/freizeit/lainzer-tiergarten-besucherinformationen",
       name: "שמורת ליינצר טירגרטן, וינה",
       nameLatin: "Lainzer Tiergarten, Vienna",
       category: "nature",
@@ -817,6 +869,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-kahlenberg",
+      website: "https://www.wien.info/en/see-do/vienna-from-above/kahlenberg-345472",
       name: "תצפית קאהלנברג, וינה",
       nameLatin: "Kahlenberg viewpoint, Vienna",
       category: "nature",
@@ -832,6 +885,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-gosausee",
+      website: "https://www.dachstein-salzkammergut.com/en/summer/experience/gosausee/",
       name: "אגם גוזאו (Vorderer Gosausee)",
       nameLatin: "Gosausee, Gosau",
       category: "nature",
@@ -848,6 +902,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-sigmund-thun-klamm",
+      website: "https://www.klammkaprun.at/en/",
       name: "נקיק זיגמונד-תון, קפרון",
       nameLatin: "Sigmund-Thun-Klamm, Kaprun",
       category: "nature",
@@ -864,6 +919,7 @@ window.TRIP_DATA = {
     },
     {
       id: "na-mirabell",
+      website: "https://www.salzburg.info/en/sights/top10/mirabell-gardens",
       name: "גני מירבל, זלצבורג",
       nameLatin: "Mirabellgarten, Salzburg",
       category: "nature",
@@ -882,6 +938,7 @@ window.TRIP_DATA = {
     /* ===== CASTLES & RAINY DAY ===== */
     {
       id: "ca-hohenwerfen",
+      website: "https://www.salzburg-burgen.at/en/hohenwerfen/",
       name: "מבצר הוהנוורפן, וורפן",
       nameLatin: "Festung Hohenwerfen, Werfen",
       category: "castle",
@@ -897,6 +954,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-hohensalzburg",
+      website: "https://www.salzburg-burgen.at/en/hohensalzburg-castle/",
       name: "מבצר הוהנזלצבורג, זלצבורג",
       nameLatin: "Hohensalzburg Fortress, Salzburg",
       category: "castle",
@@ -912,6 +970,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-salzwelten",
+      website: "https://www.salzwelten.at/en/",
       name: "מכרה המלח זלצוולטן, האליין",
       nameLatin: "Salzwelten salt mine, Hallein",
       category: "castle",
@@ -929,6 +988,7 @@ window.TRIP_DATA = {
       id: "ca-hellbrunn",
       name: "מזרקות הקסם הלברון, זלצבורג",
       nameLatin: "Hellbrunn Trick Fountains, Salzburg",
+      website: "https://www.hellbrunn.at",
       category: "castle",
       region: "salzburgerland",
       coords: { lat: 47.7622, lng: 13.0631 },
@@ -942,6 +1002,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-haus-der-natur",
+      website: "https://www.hausdernatur.at/en/",
       name: "בית הטבע, זלצבורג",
       nameLatin: "Haus der Natur, Salzburg",
       category: "castle",
@@ -957,6 +1018,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-mauterndorf",
+      website: "https://www.burg-mauterndorf.at/en/",
       name: "טירת מאוטרנדורף",
       nameLatin: "Burg Mauterndorf",
       category: "castle",
@@ -972,6 +1034,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-radstadt",
+      website: "https://www.radstadt.com/en/",
       name: "חומות העיר מימי הביניים, רדשטאדט",
       nameLatin: "Radstadt medieval town walls",
       category: "castle",
@@ -987,6 +1050,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-seegrotte",
+      website: "https://www.seegrotte.at/en/",
       name: "מערת האגם זגרוטה הינטרברול",
       nameLatin: "Seegrotte Hinterbrühl",
       category: "castle",
@@ -1002,6 +1066,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-schloss-hof",
+      website: "https://www.schlosshof.at/en/",
       name: "ארמון שלוס הוף, מרשפלד",
       nameLatin: "Schloss Hof, Marchfeld",
       category: "castle",
@@ -1017,6 +1082,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-spielzeugmuseum",
+      website: "https://www.spielzeugmuseum.at/en/",
       name: "מוזיאון הצעצועים, זלצבורג",
       nameLatin: "Spielzeugmuseum, Salzburg",
       category: "castle",
@@ -1033,6 +1099,7 @@ window.TRIP_DATA = {
     },
     {
       id: "ca-altaussee",
+      website: "https://www.salzwelten.at/en/altaussee",
       name: "מכרה המלח אלטאאוסה",
       nameLatin: "Salzwelten Altaussee",
       category: "castle",
@@ -1053,6 +1120,7 @@ window.TRIP_DATA = {
       id: "vi-schoenbrunn",
       name: "ארמון וגני שנברון",
       nameLatin: "Schönbrunn Palace & gardens",
+      website: "https://www.schoenbrunn.at",
       category: "vienna",
       region: "vienna",
       coords: { lat: 48.1845, lng: 16.3122 },
@@ -1068,6 +1136,7 @@ window.TRIP_DATA = {
       id: "vi-tiergarten",
       name: "גן החיות טירגרטן שנברון",
       nameLatin: "Tiergarten Schönbrunn (zoo)",
+      website: "https://www.zoovienna.at",
       category: "vienna",
       region: "vienna",
       coords: { lat: 48.1817, lng: 16.3021 },
@@ -1083,6 +1152,7 @@ window.TRIP_DATA = {
       id: "vi-prater",
       name: "הגלגל הענק ופארק השעשועים פראטר",
       nameLatin: "Wiener Riesenrad & Prater funfair",
+      website: "https://www.praterwien.com",
       category: "vienna",
       region: "vienna",
       coords: { lat: 48.2166, lng: 16.3958 },
@@ -1096,6 +1166,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-stephansdom",
+      website: "https://www.stephanskirche.at/",
       name: "קתדרלת שטפן ומרכז העיר",
       nameLatin: "Stephansdom & city centre",
       category: "vienna",
@@ -1111,6 +1182,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-haus-des-meeres",
+      website: "https://www.haus-des-meeres.at/en/",
       name: "האוס דה מארס — אקווה טרה זו",
       nameLatin: "Haus des Meeres aqua terra zoo",
       category: "vienna",
@@ -1126,6 +1198,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-nhm",
+      website: "https://www.nhm-wien.ac.at/en",
       name: "המוזיאון להיסטוריה של הטבע",
       nameLatin: "Naturhistorisches Museum",
       category: "vienna",
@@ -1141,6 +1214,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-technisches",
+      website: "https://www.technischesmuseum.at/en",
       name: "המוזיאון הטכני של וינה",
       nameLatin: "Technisches Museum Wien",
       category: "vienna",
@@ -1156,6 +1230,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-belvedere",
+      website: "https://www.belvedere.at/en",
       name: "ארמון בלוודרה וקלימט",
       nameLatin: "Schloss Belvedere & Klimt",
       category: "vienna",
@@ -1171,6 +1246,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-donauturm",
+      website: "https://www.donauturm.at/en/",
       name: "מגדל הדנובה (דונאוטורם)",
       nameLatin: "Donauturm (Danube Tower)",
       category: "vienna",
@@ -1186,6 +1262,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-time-travel",
+      website: "https://www.timetravel-vienna.at/en/",
       name: "מסע בזמן וינה",
       nameLatin: "Time Travel Vienna",
       category: "vienna",
@@ -1201,6 +1278,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-rathausplatz",
+      website: "https://www.wien.info/en/see-do/sights-from-a-to-z/rathaus-city-hall-344340",
       name: "פסטיבל הסרטים בכיכר העירייה (ערבי אוגוסט)",
       nameLatin: "Rathausplatz film festival (August evenings)",
       category: "vienna",
@@ -1216,6 +1294,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-naschmarkt",
+      website: "https://www.wien.info/en/dine-drink/markets/naschmarkt-359104",
       name: "שוק נשמרקט",
       nameLatin: "Naschmarkt",
       category: "vienna",
@@ -1233,6 +1312,7 @@ window.TRIP_DATA = {
       id: "vi-kindermuseum",
       name: "מוזיאון הילדים בשנברון",
       nameLatin: "Kindermuseum Schönbrunn (Children's Museum)",
+      website: "https://www.kindermuseumschoenbrunn.at",
       category: "vienna",
       region: "vienna",
       coords: { lat: 48.1836, lng: 16.312 },
@@ -1247,6 +1327,7 @@ window.TRIP_DATA = {
     },
     {
       id: "vi-irrgarten",
+      website: "https://www.schoenbrunn.at/en/all-attractions/maze-labyrinth-and-labyrinthikon-playground",
       name: "המבוך והלבירינת בשנברון",
       nameLatin: "Schönbrunn Maze & Labyrinth (Irrgarten)",
       category: "vienna",
@@ -1265,6 +1346,7 @@ window.TRIP_DATA = {
     /* ===== FOOD & RESTAURANTS ===== */
     {
       id: "fo-figlmueller",
+      website: "https://www.figlmueller.at/en/",
       name: "פיגלמולר וולצייל, וינה",
       nameLatin: "Figlmüller Wollzeile, Vienna",
       category: "food",
@@ -1281,6 +1363,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-plachutta",
+      website: "https://www.plachutta.at/",
       name: "פלכוטה וולצייל, וינה",
       nameLatin: "Plachutta Wollzeile, Vienna",
       category: "food",
@@ -1297,6 +1380,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-schnitzelwirt",
+      website: "https://www.schnitzelwirt.co.at/",
       name: "שניצלוירט, נויבאו, וינה",
       nameLatin: "Schnitzelwirt, Neubau, Vienna",
       category: "food",
@@ -1313,6 +1397,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-bitzinger",
+      website: "https://www.bitzinger-wien.at/",
       name: "דוכן הנקניקיות ביצינגר, כיכר אלברטינה",
       nameLatin: "Bitzinger Würstelstand am Albertinaplatz",
       category: "food",
@@ -1329,6 +1414,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-cafe-central",
+      website: "https://www.cafecentral.wien/en/",
       name: "קפה סנטרל, וינה",
       nameLatin: "Café Central, Vienna",
       category: "food",
@@ -1345,6 +1431,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-demel",
+      website: "https://www.demel.com/en/",
       name: "דמל, וינה",
       nameLatin: "Demel, Vienna",
       category: "food",
@@ -1361,6 +1448,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-milk-honey",
+      website: "https://www.milknhoney.at/",
       name: "מילק אנד האני (כשר), וינה",
       nameLatin: "Milk'n Honey (kosher), Vienna",
       category: "food",
@@ -1377,6 +1465,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-bahur-tov",
+      website: "https://www.bahurtov.at/",
       name: "בחור טוב (כשר בשרי), וינה",
       nameLatin: "Bahur Tov (kosher meat), Vienna",
       category: "food",
@@ -1393,6 +1482,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-augustiner",
+      website: "https://www.augustinerbier.at/",
       name: "אוגוסטינר בּרויְשְטוּבְּל, זלצבורג",
       nameLatin: "Augustiner Bräustübl, Salzburg",
       category: "food",
@@ -1409,6 +1499,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-st-peter",
+      website: "https://www.stpeter-stiftskulinarium.at/en/",
       name: "סנט פטר שטיפטסקולינריום, זלצבורג",
       nameLatin: "St. Peter Stiftskulinarium, Salzburg",
       category: "food",
@@ -1425,6 +1516,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-oberhofalm",
+      website: "https://www.oberhofalm.at/",
       name: "מטבח בקתת אוברהופאלם, פילצמוס",
       nameLatin: "Oberhofalm hut kitchen, Filzmoos",
       category: "food",
@@ -1441,6 +1533,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-kirchenwirt-altenmarkt",
+      website: "https://www.kirchenwirt-altenmarkt.at/",
       name: "גסטהוף כפרי, מרכז אלטנמרקט",
       nameLatin: "Village Gasthof, Altenmarkt centre",
       category: "food",
@@ -1457,6 +1550,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-grafenwirt-wagrain",
+      website: "https://www.grafenwirt.at/",
       name: "צום גרפנוירט, וגראין",
       nameLatin: "Zum Grafenwirt, Wagrain",
       category: "food",
@@ -1468,11 +1562,12 @@ window.TRIP_DATA = {
       weather: "any",
       travelNote: "~15 דק׳ מאלטנמרקט",
       description:
-        "פרשנות מודרנית לבישול אזורי בכפר וגראין, עם גן. שילוב טבעי עם אחר צהריים ברכבלית גרפנברג.",
+        "פרשנות מודרנית לבישול אזורי בכפר וגראין, עם גן. שילוב טבעי עם אחר צהריים בהר החוויות גייסטרברג הסמוך בסט. יוהאן.",
       tags: ["dinner", "garden"],
     },
     {
       id: "fo-supermarkt-radstadt",
+      website: "https://www.billa.at/",
       name: "סופרמרקטים ובית מרקחת, רדשטאדט",
       nameLatin: "Supermarkets & pharmacy, Radstadt",
       category: "food",
@@ -1489,6 +1584,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-rosner",
+      website: "https://www.gasthof-rosner.at/",
       name: "גסטהוף רוזנר, אלטנמרקט",
       nameLatin: "Gasthof Rosner, Altenmarkt",
       category: "food",
@@ -1505,6 +1601,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-sattelbauer",
+      website: "https://www.sattelbauer.at/",
       name: "ברגגסטהוף זאטלבאואר, פלאכאו",
       nameLatin: "Berggasthof Sattelbauer, Flachau",
       category: "food",
@@ -1521,6 +1618,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-steinerwirt",
+      website: "https://www.steinerwirt.at/",
       name: "שטיינרוירט, גוזאו",
       nameLatin: "Steinerwirt, Gosau",
       category: "food",
@@ -1537,6 +1635,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-doellerer",
+      website: "https://www.doellerer.at/",
       name: "דלרר, גולינג",
       nameLatin: "Döllerer, Golling an der Salzach",
       category: "food",
@@ -1553,6 +1652,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-lugeck",
+      website: "https://www.figlmueller.at/en/our-restaurants/lugeck/",
       name: "לוגק, וינה",
       nameLatin: "Lugeck Figlmüller, Vienna",
       category: "food",
@@ -1569,6 +1669,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-sacher",
+      website: "https://www.sacher.com/en/restaurants/cafe-sacher-wien/",
       name: "קפה זאכר, וינה",
       nameLatin: "Café Sacher, Vienna",
       category: "food",
@@ -1585,6 +1686,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-zanoni",
+      website: "https://www.zanoni.at/",
       name: "זנוני אנד זנוני, וינה",
       nameLatin: "Zanoni & Zanoni, Vienna",
       category: "food",
@@ -1601,6 +1703,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-roemerkeller",
+      website: "https://www.roemerkeller.at/",
       name: "רסטורנט רמרקלר, אלטנמרקט",
       nameLatin: "Restaurant Römerkeller, Altenmarkt",
       category: "food",
@@ -1617,6 +1720,7 @@ window.TRIP_DATA = {
     },
     {
       id: "fo-kessei",
+      website: "https://www.kessei.at/",
       name: "וירטסהאוס סקסאי, אלטנמרקט/צאוכנזה",
       nameLatin: "Wirtshaus s'Kessei, Altenmarkt/Zauchensee",
       category: "food",
@@ -1630,6 +1734,121 @@ window.TRIP_DATA = {
       description:
         "וירטסהאוס/בר מקומי לארוחת ערב או משקה באזור אלטנמרקט/צאוכנזה. אופציה קרובה נוספת לערבים; אמתו שעות וזמינות מקום מראש.",
       tags: ["local", "dinner", "verify"],
+    },
+    {
+      id: "fo-fleischer",
+      name: "שפייזלוקאל דר פליישר, פלאכאו",
+      nameLatin: "Speiselokal der Fleischer, Flachau",
+      category: "food",
+      region: "salzburgerland",
+      coords: { lat: 47.3448, lng: 13.3872 },
+      navQuery: "Speiselokal der Fleischer, Dorfstraße 102, Flachau, Austria",
+      priority: "high",
+      duration: "1.5 h",
+      weather: "any",
+      travelNote: "~15 דק׳ מאלטנמרקט",
+      description:
+        "קצביה משפחתית שהפכה למסעדה קטנה ומעולה — לכאן המקומיים באים לבורגרים, בשרים על הגריל ומנות אלפיניות טריות באווירה קז׳ואלית. הרבה פחות תיירותי מהמסעדות שבמרכז.",
+      tags: ["local", "meat", "burger"],
+    },
+    {
+      id: "fo-schuetzenwirt",
+      name: "גסטהוף שיצנוירט, סנט יוהאן אים פונגאו",
+      nameLatin: "Gasthof Schützenwirt, St. Johann im Pongau",
+      category: "food",
+      region: "salzburgerland",
+      coords: { lat: 47.3486, lng: 13.2036 },
+      navQuery: "Gasthof Schützenwirt, Hauptstraße 59, St. Johann im Pongau, Austria",
+      priority: "high",
+      duration: "1.5 h",
+      weather: "any",
+      travelNote: "~30 דק׳ מאלטנמרקט",
+      description:
+        "פאב-מסעדה כפרי מסורתי ליד נקיק ליכטנשטיין — שניצל וינאי עסיסי, קספרסקנדל ושפצלה גבינות בחצר ירוקה ואינטימית. עצירה מצוינת בדרך לקניון.",
+      tags: ["local", "schnitzel", "quiet"],
+    },
+    {
+      id: "fo-poeschl",
+      name: "גסטהאוס פּשל, וינה",
+      nameLatin: "Gasthaus Pöschl, Vienna",
+      category: "food",
+      region: "vienna",
+      coords: { lat: 48.2065, lng: 16.3746 },
+      navQuery: "Gasthaus Pöschl, Weihburggasse 17, Vienna, Austria",
+      priority: "high",
+      duration: "1.5 h",
+      weather: "any",
+      travelNote: "3 דק׳ מקתדרלת שטפן",
+      description:
+        "מטבח וינאי אמיתי במקום קטן ורגוע, אהוב על תושבי העיר והרבה פחות תיירותי מהמסעדות שסביב הקתדרלה. אין אתר רשמי — הזמינו מקום מראש בטלפון.",
+      tags: ["local", "classic", "reserve", "quiet"],
+    },
+    {
+      id: "fo-sperl",
+      website: "https://www.cafesperl.at/",
+      name: "קפה שפרל, וינה",
+      nameLatin: "Café Sperl, Vienna",
+      category: "food",
+      region: "vienna",
+      coords: { lat: 48.1989, lng: 16.3628 },
+      navQuery: "Café Sperl, Gumpendorfer Straße 11, Vienna, Austria",
+      priority: "high",
+      duration: "1 h",
+      weather: "any",
+      travelNote: "רובע 6, ליד הנאשמרקט",
+      description:
+        "בית קפה וינאי היסטורי מ-1880 שנשאר אותנטי לגמרי — שולחנות ביליארד מעץ, קפה משובח ועוגות מסורתיות, בלי התורים של המרכז.",
+      tags: ["coffee house", "historic", "cake", "quiet"],
+    },
+    {
+      id: "fo-jonas-reindl",
+      website: "https://www.jonasreindl.at/",
+      name: "יונאס ריינדל, וינה",
+      nameLatin: "Jonas Reindl Coffee Roasters, Vienna",
+      category: "food",
+      region: "vienna",
+      coords: { lat: 48.2157, lng: 16.3599 },
+      navQuery: "Jonas Reindl Coffee Roasters, Währinger Straße 2-4, Vienna, Austria",
+      priority: "optional",
+      duration: "45 min",
+      weather: "any",
+      travelNote: "רובע 9, ליד שוטנטור",
+      description:
+        "בית קפה מודרני של ׳גל שלישי׳ לקפה מדויק בקלייה מקומית, אהוב על סטודנטים ומקומיים באזור האוניברסיטה. עצירת קפה איכותית הרחק מהתיירים.",
+      tags: ["specialty coffee", "local", "quick"],
+    },
+    {
+      id: "fo-eissalon-tuchlauben",
+      website: "https://www.eissalon-tuchlauben.at/",
+      name: "אייסאלון טוכלאובן, וינה",
+      nameLatin: "Eissalon Tuchlauben, Vienna",
+      category: "food",
+      region: "vienna",
+      coords: { lat: 48.2104, lng: 16.3690 },
+      navQuery: "Eissalon Tuchlauben, Tuchlauben 15, Vienna, Austria",
+      priority: "optional",
+      duration: "20 min",
+      weather: "any",
+      travelNote: "דקות מהגראבן, רובע 1",
+      description:
+        "גלידרייה וינאית איכותית בלב העיר העתיקה, פועלת עשרות שנים ופחות המונית מגלידריות הרשת התיירותיות. עצירה מתוקה בין הסמטאות.",
+      tags: ["ice cream", "kids", "quick"],
+    },
+    {
+      id: "fo-karmelitermarkt",
+      name: "שוק קרמליטר, וינה",
+      nameLatin: "Karmelitermarkt, Vienna",
+      category: "food",
+      region: "vienna",
+      coords: { lat: 48.2166, lng: 16.3789 },
+      navQuery: "Karmelitermarkt, Vienna, Austria",
+      priority: "optional",
+      duration: "1 h",
+      weather: "any",
+      travelNote: "רובע 2, לאופולדשטדט",
+      description:
+        "חלופה רגועה ואותנטית לנאשמרקט הסואן — שוק שכונתי מקסים עם דוכני אוכל טרי, בתי קפה קטנים ואווירה מקומית. הכי חי בבקרים ובשבת.",
+      tags: ["market", "food stalls", "local", "quiet"],
     },
   ],
 

@@ -27,6 +27,7 @@
     categories: new Set(), // empty = all
     weather: 'all',        // all | sun | rain
     region: 'all',         // all | <region id>
+    status: 'all',         // all | fav | todo | done
     minRank: 1,
     position: null,        // { lat, lng, at } — last known GPS fix
     locating: false,
@@ -44,6 +45,7 @@
         categories: [...state.categories],
         weather: state.weather,
         region: state.region,
+        status: state.status,
         minRank: state.minRank,
         position: state.position,
         favorites: [...state.favorites],
@@ -60,6 +62,7 @@
       if (Array.isArray(raw.categories)) state.categories = new Set(raw.categories);
       if (raw.weather) state.weather = raw.weather;
       if (raw.region) state.region = raw.region;
+      if (raw.status) state.status = raw.status;
       if (raw.minRank) state.minRank = Number(raw.minRank);
       // Stale fixes are worse than none — a day-old position gives wrong distances.
       if (raw.position && Date.now() - raw.position.at < 6 * 60 * 60 * 1000) {
@@ -189,6 +192,17 @@
   const chip = (text, cls = 'bg-slate-100 text-slate-600 ring-slate-200') =>
     `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${cls}">${text}</span>`;
 
+  /** Website link for a place. Uses the verified `website` when present;
+   *  otherwise falls back to a Google search for the place, so the button is
+   *  never a dead 404 — the user still lands on hours / menu / reviews. */
+  const siteLink = (t) => {
+    const href = t.website
+      || `https://www.google.com/search?q=${encodeURIComponent(t.navQuery || t.name || t.address || '')}`;
+    const label = t.website ? `🌐 ${esc(T.website)}` : `🔎 ${esc(T.websiteSearch)}`;
+    return `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr"
+         class="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 active:opacity-70">${label} ↗</a>`;
+  };
+
   /** Small gray subtitle showing the original Latin place name under a
    *  Hebrew heading — helps matching against road signs and Maps results. */
   const latinSub = (latin) => latin ? `<p class="text-xs text-slate-400" dir="ltr">${esc(latin)}</p>` : '';
@@ -271,6 +285,7 @@
           <p class="text-xs text-slate-500">🌙 ${h.nights === 1 ? T.nightsOne : fmt('nights', { n: h.nights })}</p>
           ${h.notes ? `<p class="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900">${esc(h.notes)}</p>` : ''}
           <div class="mt-3 space-y-2">
+            <div>${siteLink(h)}</div>
             ${navBlock(h, T.navigateHere)}
             ${h.phone ? `<a href="tel:${esc(h.phone)}" class="flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-semibold">📞 ${esc(h.phone)}</a>` : ''}
           </div>
@@ -416,6 +431,16 @@
       .map((r) => `
         <button data-region="${r.id}" type="button"
           class="seg-btn rounded-md px-2.5 py-1 font-medium transition">${esc(r.label)}</button>`).join('');
+
+    // favorite / done status segmented control
+    $('#status-rail').innerHTML = [
+      { id: 'all', label: T.statusAll },
+      { id: 'fav', label: T.statusFav },
+      { id: 'todo', label: T.statusTodo },
+      { id: 'done', label: T.statusDone },
+    ].map((s) => `
+      <button data-status="${s.id}" type="button"
+        class="seg-btn rounded-md px-2.5 py-1 font-medium transition">${s.label}</button>`).join('');
   }
 
   function paintFilterState() {
@@ -431,8 +456,16 @@
     });
     seg('[data-weather]', 'weather');
     seg('[data-region]', 'region');
+    seg('[data-status]', 'status');
     $('#priority').value = String(state.minRank);
     $('#search').value = state.query;
+
+    // Pinned clear-categories button: visible only when a category is active,
+    // so a selection scrolled off the (RTL) rail's edge is always clearable.
+    const n = state.categories.size;
+    const clearBtn = $('#btn-clear-cat');
+    clearBtn.hidden = n === 0;
+    clearBtn.textContent = n > 1 ? `${T.clearCats} (${n})` : T.clearCats;
   }
 
   /** Apply filters, attach distances, sort. Returns the visible list. */
@@ -445,6 +478,9 @@
       // 'any'-weather items always pass a sun/rain filter — they work either way.
       if (state.weather !== 'all' && a.weather !== state.weather && a.weather !== 'any') return false;
       if (state.region !== 'all' && a.region !== state.region) return false;
+      if (state.status === 'fav' && !state.favorites.has(a.id)) return false;
+      if (state.status === 'todo' && state.done.has(a.id)) return false;
+      if (state.status === 'done' && !state.done.has(a.id)) return false;
       if (rankOf(a) < state.minRank) return false;
       if (terms.length) {
         const hay = [
@@ -510,6 +546,7 @@
         ${a.travelNote ? `<p class="mt-1.5 text-xs font-medium text-slate-500">🚗 ${esc(a.travelNote)}</p>` : ''}
         ${tags ? `<div class="mt-2 flex flex-wrap gap-1">${tags}</div>` : ''}
         <div class="mt-3 space-y-2">
+          <div>${siteLink(a)}</div>
           ${navBlock(a)}
           <div class="flex gap-1.5">
             ${favBtnHtml(a.id)}
@@ -651,6 +688,11 @@
       paintFilterState(); renderAttractions(); persist();
     });
 
+    $('#btn-clear-cat').addEventListener('click', () => {
+      state.categories.clear();
+      paintFilterState(); renderAttractions(); persist();
+    });
+
     $('#weather-rail').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-weather]');
       if (!btn) return;
@@ -662,6 +704,13 @@
       const btn = e.target.closest('[data-region]');
       if (!btn) return;
       state.region = btn.dataset.region;
+      paintFilterState(); renderAttractions(); persist();
+    });
+
+    $('#status-rail').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-status]');
+      if (!btn) return;
+      state.status = btn.dataset.status;
       paintFilterState(); renderAttractions(); persist();
     });
 
@@ -678,11 +727,14 @@
       if (favBtn) {
         const id = favBtn.dataset.fav;
         state.favorites.has(id) ? state.favorites.delete(id) : state.favorites.add(id);
-        paintCardState(id); persist();
+        persist();
+        // Under an active status filter the card may need to leave the list.
+        state.status === 'all' ? paintCardState(id) : renderAttractions();
       } else if (doneBtn) {
         const id = doneBtn.dataset.done;
         state.done.has(id) ? state.done.delete(id) : state.done.add(id);
-        paintCardState(id); persist();
+        persist();
+        state.status === 'all' ? paintCardState(id) : renderAttractions();
       }
     });
 
@@ -693,6 +745,7 @@
       state.categories.clear();
       state.weather = 'all';
       state.region = 'all';
+      state.status = 'all';
       state.minRank = 1;
       paintFilterState(); renderAttractions(); persist();
     });
