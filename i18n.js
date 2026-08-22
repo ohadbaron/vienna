@@ -55,6 +55,17 @@ window.I18N = {
     journeyNoDate: 'תאריך לא ידוע',
     journeyNoDateHint: 'סומנו כבוצעו לפני שהיומן היה קיים — הקישו ✎ להוספת תאריך ושעה.',
 
+    /* ---- whole-trip overview route ---- */
+    tripRouteTitle: '🌍 כל הטיול על מפה אחת',
+    tripRouteHotels: 'כולל מלונות',
+    tripRouteCount: '{n} עצירות לפי סדר הביקור',
+    tripRouteOne: '🗺️ פתח את כל הטיול ב-Google Maps',
+    tripRouteLeg: '🗺️ קטע {i} מתוך {n} · {count} עצירות',
+    // Google allows 9 stops between an origin and a destination in one link, so a
+    // whole trip has to be split. The legs overlap by one stop, so nothing is lost.
+    tripRouteSplit: 'Google Maps מגביל כל קישור ל-11 עצירות, לכן הטיול מפוצל לקטעים רצופים — כל קטע מתחיל במקום שבו הקודם נגמר, כך שיחד הם מכסים את כל הטיול.',
+    tripRouteNeedsTwo: 'צריך לפחות שני מקומות עם תאריך ביומן כדי לראות מסלול.',
+
     /* ---- entry rows ---- */
     entryMarkVisited: 'סמן שביקרנו',
     entryUnvisit: 'החזר לתכנית',
@@ -63,6 +74,9 @@ window.I18N = {
     entryDown: 'הזז למטה',
     entryManual: 'מקום שהוספתי',
     entryOpenLink: 'הקישור שהדבקתי',
+    // A short maps.app.goo.gl link carries no coordinates, and it can't be
+    // expanded offline — so the day route has nothing to aim at but the name.
+    entryLinkNoCoords: '⚠️ מהקישור המקוצר לא הצלחנו לחלץ מיקום, ולכן מסלול היום יחפש לפי השם. הקישו ✎ והדביקו קישור ארוך (google.com/maps/place/…) או קואורדינטות.',
 
     /* ---- add / edit sheet ----
      * Only strings app.js writes at runtime live here; the sheet's static labels
@@ -73,12 +87,12 @@ window.I18N = {
     sheetEdit: 'עריכת רשומה',
     sheetModePlanned: '🗓️ מתוכנן',
     sheetModeVisited: '📖 היינו שם',
-    sheetLinkHelp: 'קישור ארוך → נחלץ ממנו שם וקואורדינטות. קישור מקוצר יישמר ויפתח כמו שהוא.',
+    sheetLinkHelp: 'קישור ארוך → נחלץ ממנו מיקום מדויק למסלול היום. קישור מקוצר (maps.app.goo.gl) לא ניתן לפענוח — הדביקו קישור ארוך או קואורדינטות.',
     sheetNeedsName: 'צריך למלא שם מקום.',
     sheetNeedsDate: 'צריך לבחור תאריך.',
     sheetLinkParsedName: 'זוהה מהקישור: {name}',
-    sheetLinkParsedCoords: 'זוהו קואורדינטות מהקישור.',
-    sheetLinkShort: 'קישור מקוצר — לא ניתן לפענח אותו במצב לא מקוון, אז צריך למלא שם.',
+    sheetLinkParsedCoords: '✓ זוהה מיקום מדויק — מסלול היום ינווט אליו.',
+    sheetLinkShort: '⚠️ קישור מקוצר — לא ניתן לפענח אותו במצב לא מקוון. הוא יישמר ויפתח כמו שהוא, אבל מסלול היום יחפש לפי השם. לדיוק: הדביקו קישור ארוך או קואורדינטות.',
 
     /* ---- toasts ---- */
     addedToPlan: 'נוסף לתכנית · {date}',

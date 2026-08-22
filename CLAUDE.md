@@ -42,16 +42,21 @@ duplicated across the two views and editing a journey row edits the row that was
   lives in the base layer, so `class="grid"`/`flex`/`block` in the utilities layer wins and
   the element stays visible. Elements toggled via the `hidden` property carry no display
   utility. This has already caused two bugs in `index.html`.
-- Google's Maps URLs API takes at most **9 waypoints** (`MAX_WAYPOINTS`). `routeUrl()`
-  returns `{ url, dropped }` — surface `dropped`, never truncate a day silently.
-- **Everything navigates by name, with one exception.** Places from `data.js` have verified
-  `nameLatin`/`navQuery` values that Google resolves reliably, and a name lands you on the POI
-  — its entrance and car park — rather than on a coordinate that may sit in the wrong field.
-  So both the per-place nav menu (`destStr()`) and the multi-stop day route (`routePoint()`)
-  use names. The exception is a manual place whose location the user gave *as coordinates*
-  (`coordsTyped`): those are used verbatim, because they're exactly what was asked for. A
-  pasted URL is not a valid waypoint in the directions API, so link-based manual places route
-  by the place name the link resolved to; the URL itself is kept for the row's 🔗 button.
+- Google's Maps URLs API takes at most **9 waypoints** (`MAX_WAYPOINTS`), i.e. 11 stops per
+  link. Per day, `routeUrl()` returns `{ url, dropped }` — surface `dropped`, never truncate a
+  day silently. For the whole-trip overview in the journey, `chunkRoute()` splits the trip
+  into consecutive legs that **overlap by one stop**, so the legs join end to end and nothing
+  is lost; each leg is then a normal `routeUrl()` call with `dropped === 0`.
+- **Two navigation rules, by origin of the place.** Places from `data.js` navigate by their
+  verified `nameLatin`/`navQuery` — the name lands you on the POI, its entrance and its car
+  park, rather than on a coordinate that may sit in the wrong field. Places the *user* added
+  navigate by the location the user supplied: coordinates they typed, or the coordinates
+  carried inside the Google Maps link they pasted. `routePoint()` decides via the `manual`
+  flag, which `entryPlace()` stamps at read time rather than storing — so entries saved by
+  older versions get the behaviour with no migration.
+- A short `maps.app.goo.gl` link contains no coordinates and can't be expanded without a
+  network round trip, so those manual places fall back to their name. That's visible, not
+  silent: the sheet warns on paste and the row shows `T.entryLinkNoCoords`.
 - A short `maps.app.goo.gl` link cannot be resolved without following a redirect, which the
   app can't do offline. `parseMapsLink()` returns just `{ url }` for those, which is why the
   manual-place name field is required.

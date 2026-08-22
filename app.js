@@ -42,6 +42,7 @@
     entrySeq: 0,           // monotonic id counter; survives deletions
     planDay: null,         // 'YYYY-MM-DD' currently shown in the planner
     routeFromHotel: true,  // day-route preview bookends with that night's hotel
+    tripRouteHotels: false, // whole-trip overview includes the hotels (opt-in)
 
     // Derived from `entries` by reindex(), never persisted.
     visitedRefs: new Set(),
@@ -77,6 +78,7 @@
         entrySeq: state.entrySeq,
         planDay: state.planDay,
         routeFromHotel: state.routeFromHotel,
+        tripRouteHotels: state.tripRouteHotels,
       }));
     } catch (_) { /* private browsing — filters just won't persist */ }
   };
@@ -119,6 +121,7 @@
       state.entrySeq = Number(raw.entrySeq) || state.entries.length;
       if (raw.planDay) state.planDay = raw.planDay;
       if (typeof raw.routeFromHotel === 'boolean') state.routeFromHotel = raw.routeFromHotel;
+      if (typeof raw.tripRouteHotels === 'boolean') state.tripRouteHotels = raw.tripRouteHotels;
     } catch (_) { /* ignore corrupt state */ }
     reindex();
   };
@@ -304,9 +307,6 @@
       // "open the link I pasted" button on the row.
       url: parsed.url || '',
       coords: parsed.coords || null,
-      // True only when the location was given *as* coordinates rather than as a
-      // link or a name — that's the one case a day route should use a raw pin.
-      coordsTyped: !!(parsed.coords && !parsed.url),
     };
   };
 
@@ -315,15 +315,16 @@
   // destination. More than that and we keep the first 9 and say so.
   const MAX_WAYPOINTS = 9;
 
-  /** One point in a multi-stop route. Names, not pins — every place in data.js
-   *  carries a verified nameLatin/navQuery that Google resolves reliably, and a
-   *  name lands you on the POI (its entrance and car park) rather than on a bare
-   *  coordinate that might sit in the wrong field.
-   *  The one exception: a manual place whose location you gave *as* coordinates.
-   *  There the coordinates are exactly what you asked for, so they're used
-   *  verbatim. A pasted link isn't a valid waypoint in the directions API, so
-   *  those route by the place name the link resolved to. */
-  const routePoint = (t) => (t?.coordsTyped && t.coords
+  /** One point in a multi-stop route.
+   *  A place from data.js routes by its verified name — that lands you on the POI,
+   *  its entrance and its car park, rather than on a coordinate that might sit in
+   *  the wrong field.
+   *  A place *you* added routes by the location you gave it: the coordinates you
+   *  typed, or the ones carried inside the Google Maps link you pasted. Its name
+   *  is only a last resort, because a name you chose ("הקפה שלנו") may not resolve
+   *  to anything — that happens with a short maps.app.goo.gl link, which can't be
+   *  decoded without a network round trip. */
+  const routePoint = (t) => (t?.manual && t.coords
     ? `${t.coords.lat},${t.coords.lng}`
     : destStr(t));
 
@@ -356,10 +357,53 @@
     return { url: `https://www.google.com/maps/dir/?${params.join('&')}`, dropped };
   };
 
+  /* ---------------- whole-trip overview route ---------------- */
+  // One link holds an origin, a destination and 9 waypoints — 11 stops. A whole
+  // trip is usually more than that, so the overview is split into consecutive
+  // legs instead of being truncated.
+  const SEGMENT_STOPS = MAX_WAYPOINTS + 2;
+
+  /** Every visited place in the order it actually happened, across all days.
+   *  With `withHotels`, each accommodation is inserted once — at the point you
+   *  first slept there — rather than after every single night: repeating
+   *  Barbarahof for all seven alpine nights would burn the stop budget without
+   *  putting anything new on the map. */
+  const tripStops = (withHotels) => {
+    const visited = state.entries.filter((e) => e.status === 'visited' && e.date);
+    const days = [...new Set(visited.map((e) => e.date))].sort();
+    const out = [];
+    const seen = new Set();
+    const addHotel = (h) => {
+      if (h && !seen.has(h.id)) { seen.add(h.id); out.push(h); }
+    };
+    for (const iso of days) {
+      if (withHotels) addHotel(wakeHotelOn(iso));       // where the day started
+      out.push(...byTime(visited.filter((e) => e.date === iso)).map(entryPlace));
+      if (withHotels) addHotel(hotelOn(iso));           // where it ended
+    }
+    return out;
+  };
+
+  /** Split a long chain of stops into legs that each fit one Maps link. Legs
+   *  overlap by one stop, so leg 2 starts exactly where leg 1 finished and the
+   *  whole trip is covered with no gap between the links. */
+  const chunkRoute = (stops) => {
+    if (stops.length < 2) return [];
+    const legs = [];
+    for (let i = 0; i < stops.length - 1; i += SEGMENT_STOPS - 1) {
+      legs.push(stops.slice(i, i + SEGMENT_STOPS));
+    }
+    return legs;
+  };
+
   /* ---------------- the timeline ---------------- */
   /** The place an entry points at, in the shape destStr()/navBlock() expect —
-   *  either the attraction from data.js or the user's own { name, navQuery }. */
-  const entryPlace = (e) => (e.ref ? ATTR.get(e.ref) : e.custom) || { name: '' };
+   *  either the attraction from data.js or the user's own { name, navQuery }.
+   *  `manual` is stamped here rather than stored, so entries saved by earlier
+   *  versions get it too: it tells routePoint() to prefer the coordinates the
+   *  user supplied over a name they invented. */
+  const entryPlace = (e) =>
+    (e.ref ? ATTR.get(e.ref) : (e.custom && { ...e.custom, manual: true })) || { name: '' };
   const entryName = (e) => entryPlace(e).name || '';
 
   /** Entries on a day, in route order. Array order is deliberate: setting a time
@@ -797,6 +841,8 @@
             <p class="text-sm font-semibold leading-tight">${visited ? '📖 ' : ''}${esc(place.name || '')}</p>
             ${latinSub(place.nameLatin)}
             ${e.custom ? `<p class="text-[10px] text-slate-400">${esc(T.entryManual)}</p>` : ''}
+            ${e.custom && e.custom.url && !e.custom.coords
+              ? `<p class="mt-1 text-[10px] leading-relaxed text-amber-700">${esc(T.entryLinkNoCoords)}</p>` : ''}
             ${e.note ? `<p class="mt-1 rounded-lg bg-slate-50 p-2 text-xs leading-relaxed text-slate-600">${esc(e.note)}</p>` : ''}
           </div>
           <div class="flex shrink-0 items-center gap-1">
@@ -987,6 +1033,46 @@
     return a.time.localeCompare(b.time);
   });
 
+  /** "See the whole trip at once" — every visited place across every day, in the
+   *  order it happened. Almost always needs splitting into legs. */
+  function tripRouteBlock() {
+    const stops = tripStops(state.tripRouteHotels);
+    const legs = chunkRoute(stops);
+    const toggle = `
+      <button data-trip-hotels type="button" aria-pressed="${state.tripRouteHotels}"
+        class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition ${
+          state.tripRouteHotels
+            ? 'bg-ink text-white ring-ink'
+            : 'bg-white text-slate-500 ring-slate-300'}">🏨 ${esc(T.tripRouteHotels)}</button>`;
+
+    const body = !legs.length
+      ? `<p class="text-[11px] text-slate-400">${esc(T.tripRouteNeedsTwo)}</p>`
+      : `
+        <p class="text-[11px] text-slate-500">${esc(fmt('tripRouteCount', { n: stops.length }))}</p>
+        ${legs.length > 1
+          ? `<p class="text-[11px] leading-relaxed text-slate-400">${esc(T.tripRouteSplit)}</p>` : ''}
+        <div class="space-y-1.5">
+          ${legs.map((leg, i) => {
+            const { url } = routeUrl(leg, null, null);
+            const label = legs.length === 1
+              ? T.tripRouteOne
+              : fmt('tripRouteLeg', { i: i + 1, n: legs.length, count: leg.length });
+            return `<a href="${esc(url)}" target="_blank" rel="noopener"
+              class="flex w-full items-center justify-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.98] transition">
+              ${esc(label)}</a>`;
+          }).join('')}
+        </div>`;
+
+    return `
+      <article class="rounded-2xl bg-white p-4 shadow-sm">
+        <div class="flex items-start justify-between gap-2">
+          <p class="text-xs font-bold text-slate-500">${esc(T.tripRouteTitle)}</p>
+          ${toggle}
+        </div>
+        <div class="mt-2 space-y-1.5">${body}</div>
+      </article>`;
+  }
+
   function renderJourney() {
     const visited = state.entries.filter((e) => e.status === 'visited');
     const dated = visited.filter((e) => e.date);
@@ -1024,6 +1110,7 @@
           </button>
         </div>
         ${summary}
+        ${visited.length ? tripRouteBlock() : ''}
         ${visited.length ? '' : `<p class="rounded-2xl bg-white p-8 text-center text-sm leading-relaxed text-slate-500 shadow-sm">${esc(T.journeyEmpty)}</p>`}
         ${groups}
         ${undated.length ? group(T.journeyNoDate, undated, null, T.journeyNoDateHint) : ''}
@@ -1494,6 +1581,12 @@
         return;
       }
 
+      if (hit('data-trip-hotels')) {
+        state.tripRouteHotels = !state.tripRouteHotels;
+        persist(); renderJourney();
+        return;
+      }
+
       if (hit('data-goto-bank')) { setTab('attractions'); return; }
 
       const copy = hit('data-copy-day');
@@ -1533,20 +1626,16 @@
       const day = e.target.closest('[data-sheet-day]');
       if (day) { $('#sheet-date').value = day.dataset.sheetDay; paintSheet(); }
     });
-    // Pasting a link is the moment to tell the user what we could read from it.
+    // Pasting a link is the moment to tell the user whether we got a location out
+    // of it — that's what decides whether the day route can aim at a pin.
     $('#sheet-link').addEventListener('change', () => {
       const parsed = parseMapsLink($('#sheet-link').value);
       const help = $('#sheet-link-help');
-      if (parsed.name && !$('#sheet-name').value.trim()) {
-        $('#sheet-name').value = parsed.name;
-        help.textContent = fmt('sheetLinkParsedName', { name: parsed.name });
-      } else if (parsed.coords) {
-        help.textContent = T.sheetLinkParsedCoords;
-      } else if (parsed.url) {
-        help.textContent = T.sheetLinkShort;
-      } else {
-        help.textContent = T.sheetLinkHelp;
-      }
+      if (parsed.name && !$('#sheet-name').value.trim()) $('#sheet-name').value = parsed.name;
+      if (parsed.coords) help.textContent = T.sheetLinkParsedCoords;
+      else if (parsed.name) help.textContent = fmt('sheetLinkParsedName', { name: parsed.name });
+      else if (parsed.url) help.textContent = T.sheetLinkShort;
+      else help.textContent = T.sheetLinkHelp;
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !sheetEl().hidden) closeSheet();
