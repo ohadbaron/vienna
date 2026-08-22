@@ -164,6 +164,7 @@ window.I18N = {
     tripTomorrow: 'מחר!',
     tripInDays: 'בעוד {n} ימים',
     tripComplete: 'הטיול הסתיים',
+    appVersion: 'גרסה {v}',
 
     geoDenied: 'הגישה למיקום נדחתה — מוצג סדר לפי אזור ועדיפות.',
     geoUnavailable: 'המיקום אינו זמין כרגע. נסו שוב בחוץ.',

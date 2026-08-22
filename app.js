@@ -12,6 +12,9 @@
   const DURATIONS = window.I18N.durations;
   const $ = (sel) => document.querySelector(sel);
   const STORE_KEY = 'austria26.state.v1';
+  // Shown in the footer so you can tell at a glance which build a device is
+  // actually running. Bump together with CACHE in sw.js on every deploy.
+  const APP_VERSION = '6';
 
   /** Fill {token} placeholders in a UI string, e.g. fmt('nights', {n: 3}). */
   const fmt = (key, vals = {}) =>
@@ -1400,6 +1403,7 @@
     }
     $('#trip-status').innerHTML = `<span class="font-semibold text-white">${esc(status)}</span>`;
     $('#data-note').textContent = D.trip.dataNote || '';
+    $('#app-version').textContent = fmt('appVersion', { v: APP_VERSION });
   }
 
   function setTab(tab) {
@@ -1686,8 +1690,30 @@
   // Offline support. Needs https (GitLab Pages is fine); silently skipped
   // on file:// so local previews still work.
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    // Reload once when a new worker takes over, so a deploy lands without the
+    // user having to know what a service worker is. `reloading` resets on the
+    // reload itself, so this can't loop.
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    });
+
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* not fatal */ });
+      // updateViaCache: 'none' is the important part: without it the browser may
+      // serve sw.js itself out of its own HTTP cache for up to 24h, so a new
+      // worker never installs and the app looks stuck on the old build.
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+        .then((reg) => {
+          reg.update();
+          // Coming back to an installed PWA doesn't reload the page, so this is
+          // often the only moment a deploy gets noticed.
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+        })
+        .catch(() => { /* not fatal */ });
     });
   }
 })();
