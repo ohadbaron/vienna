@@ -39,8 +39,12 @@ window.I18N = {
 
     /* ---- day route preview ---- */
     dayRoute: '🗺️ מסלול היום ב-Google Maps',
-    dayRouteFromHotel: 'מהמלון וחזרה',
-    dayRouteNeedsTwo: 'צריך לפחות שני מקומות (או מקום אחד + מלון) למסלול.',
+    // The morning/evening hotels come from the booked accommodation, so a
+    // transfer day routes Moxy → stops → Barbarahof, not back where it started.
+    dayRouteHotels: 'כולל מלונות',
+    dayRouteStart: '🏨 יוצאים מ-{name}',
+    dayRouteEnd: '🏁 מסיימים ב-{name}',
+    dayRouteNeedsTwo: 'צריך לפחות שני יעדים למסלול — הוסיפו מקום ליום הזה.',
     dayRouteCapped: '⚠️ Google Maps מגביל ל-9 עצירות בדרך — {n} מקומות בסוף היום לא ייכנסו למסלול.',
 
     /* ---- journey (tab 3) ---- */

@@ -193,9 +193,17 @@
   const daysBetween = (a, b) => Math.round((b - a) / DAY_MS);
   const isoOf = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  /** Now, rounded to the nearest half hour — times are picked and stored at
+   *  30-minute granularity (see step=1800 on #sheet-time), so a prefilled or
+   *  auto-stamped value has to sit on the same grid or the picker can't show it.
+   *  Late evening floors instead of rolling into tomorrow and moving the date. */
   const hhmmNow = () => {
     const n = new Date();
-    return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+    let h = n.getHours();
+    let m = n.getMinutes() < 15 ? 0 : n.getMinutes() < 45 ? 30 : 60;
+    if (m === 60) { m = 0; h += 1; }
+    if (h > 23) { h = 23; m = 30; }
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
   /** Short label for a day chip: "ג׳ 19/8". */
   const fmtDayShort = (iso) => {
@@ -220,6 +228,20 @@
     const d = parseDate(iso);
     return D.accommodations.find((h) => d >= parseDate(h.checkIn) && d < parseDate(h.checkOut)) || null;
   };
+
+  /** The hotel you wake up in on `iso` — whichever one you slept at the night
+   *  before. Differs from hotelOn() on a transfer day, which is the whole point:
+   *  on 18/8 you leave Moxy in the morning and arrive at Barbarahof at night. */
+  const wakeHotelOn = (iso) =>
+    (iso ? hotelOn(isoOf(new Date(parseDate(iso).getTime() - DAY_MS))) : null);
+
+  /** The two ends of a day's driving, filled in from the booked accommodation:
+   *  where the morning starts and where the evening finishes. On a normal day
+   *  both are the same hotel, so the route is a there-and-back. Day one has no
+   *  start (you fly in) and departure day has no end (you fly out). */
+  const dayBookends = (iso) => (state.routeFromHotel
+    ? { start: wakeHotelOn(iso), end: hotelOn(iso) }
+    : { start: null, end: null });
 
   /* ---------------- pasted Google Maps links ---------------- */
   /** Pull what we can out of whatever the user pasted, offline.
@@ -272,16 +294,19 @@
    *  like a data.js place — so destStr() and every nav link work unchanged. */
   const makeCustom = (name, link) => {
     const parsed = parseMapsLink(link);
-    const label = (name || '').trim() || parsed.name || '';
+    const pin = parsed.coords ? `${parsed.coords.lat},${parsed.coords.lng}` : '';
+    const label = (name || '').trim() || parsed.name || pin;
     return {
       name: label,
-      // A pasted URL is the most precise thing we have; keep it for the "open"
-      // button. navQuery is what destStr() will use for a name search.
-      navQuery: parsed.coords && !label
-        ? `${parsed.coords.lat},${parsed.coords.lng}`
-        : label,
+      // navQuery is what destStr() will use for a name search.
+      navQuery: label,
+      // A pasted URL is the most precise thing we have; keep it for the direct
+      // "open the link I pasted" button on the row.
       url: parsed.url || '',
       coords: parsed.coords || null,
+      // True only when the location was given *as* coordinates rather than as a
+      // link or a name — that's the one case a day route should use a raw pin.
+      coordsTyped: !!(parsed.coords && !parsed.url),
     };
   };
 
@@ -290,13 +315,29 @@
   // destination. More than that and we keep the first 9 and say so.
   const MAX_WAYPOINTS = 9;
 
+  /** One point in a multi-stop route. Names, not pins — every place in data.js
+   *  carries a verified nameLatin/navQuery that Google resolves reliably, and a
+   *  name lands you on the POI (its entrance and car park) rather than on a bare
+   *  coordinate that might sit in the wrong field.
+   *  The one exception: a manual place whose location you gave *as* coordinates.
+   *  There the coordinates are exactly what you asked for, so they're used
+   *  verbatim. A pasted link isn't a valid waypoint in the directions API, so
+   *  those route by the place name the link resolved to. */
+  const routePoint = (t) => (t?.coordsTyped && t.coords
+    ? `${t.coords.lat},${t.coords.lng}`
+    : destStr(t));
+
   /** A driving route through `stops` (each a place-shaped object destStr() knows
-   *  how to read). With `hotel`, it starts and ends there.
+   *  how to read), from `start` and finishing at `end` when those are known.
    *  Returns { url, dropped } — dropped > 0 means the day didn't fit. */
-  const routeUrl = (stops, hotel) => {
-    if (!stops.length) return { url: '', dropped: 0 }; // hotel → hotel is not a route
-    const places = [...(hotel ? [hotel] : []), ...stops, ...(hotel ? [hotel] : [])];
+  const routeUrl = (stops, start = null, end = null) => {
+    const places = [...(start ? [start] : []), ...stops, ...(end ? [end] : [])];
     if (places.length < 2) return { url: '', dropped: 0 };
+    // A day with no stops is only a route if it actually goes somewhere — i.e.
+    // it's a transfer between two different hotels, not a loop back to the same one.
+    if (!stops.length && routePoint(places[0]) === routePoint(places[places.length - 1])) {
+      return { url: '', dropped: 0 };
+    }
 
     const origin = places[0];
     const destination = places[places.length - 1];
@@ -304,7 +345,7 @@
     const dropped = Math.max(0, middle.length - MAX_WAYPOINTS);
     const kept = middle.slice(0, MAX_WAYPOINTS);
 
-    const q = (t) => encodeURIComponent(destStr(t));
+    const q = (t) => encodeURIComponent(routePoint(t));
     const params = [
       'api=1',
       'travelmode=driving',
@@ -774,16 +815,24 @@
       </li>`;
   }
 
-  /** The "see the whole day in Google Maps" control. */
+  /** The "see the whole day in Google Maps" control. The morning and evening
+   *  hotels are filled in from the booked accommodation, so a transfer day routes
+   *  Moxy → stops → Barbarahof rather than looping back to where it started. */
   function routeBlock(iso, stops) {
-    const hotel = state.routeFromHotel ? hotelOn(iso) : null;
-    const { url, dropped } = routeUrl(stops.map(entryPlace), hotel);
+    const { start, end } = dayBookends(iso);
+    const { url, dropped } = routeUrl(stops.map(entryPlace), start, end);
     const toggle = `
       <button data-route-hotel type="button" aria-pressed="${state.routeFromHotel}"
-        class="rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition ${
+        class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition ${
           state.routeFromHotel
             ? 'bg-ink text-white ring-ink'
-            : 'bg-white text-slate-500 ring-slate-300'}">🏨 ${esc(T.dayRouteFromHotel)}</button>`;
+            : 'bg-white text-slate-500 ring-slate-300'}">🏨 ${esc(T.dayRouteHotels)}</button>`;
+
+    const ends = state.routeFromHotel && (start || end) ? `
+      <div class="space-y-0.5 text-[11px] text-slate-400">
+        ${start ? `<p class="truncate">${esc(fmt('dayRouteStart', { name: start.name }))}</p>` : ''}
+        ${end ? `<p class="truncate">${esc(fmt('dayRouteEnd', { name: end.name }))}</p>` : ''}
+      </div>` : '';
 
     if (!url) {
       return `
@@ -798,9 +847,9 @@
            class="flex w-full items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.98] transition">
           ${esc(T.dayRoute)}
         </a>
-        <div class="flex items-center gap-2">
+        <div class="flex items-start gap-2">
           ${toggle}
-          ${hotel ? `<span class="truncate text-[11px] text-slate-400">${esc(fmt('hotelForNight', { name: hotel.name }))}</span>` : ''}
+          ${ends}
         </div>
         ${dropped ? `<p class="text-[11px] leading-relaxed text-amber-700">${esc(fmt('dayRouteCapped', { n: dropped }))}</p>` : ''}
       </div>`;
@@ -928,12 +977,23 @@
   /* ================================================================
    *  TAB 3 — JOURNEY LOG
    * ================================================================ */
+  /** Order a day chronologically for display: timed rows ascending, untimed last
+   *  keeping their relative order. Display-only — it never touches the array
+   *  order the planner routes by, which the user controls with ▲▼. */
+  const byTime = (list) => [...list].sort((a, b) => {
+    if (!a.time && !b.time) return 0;
+    if (!a.time) return 1;
+    if (!b.time) return -1;
+    return a.time.localeCompare(b.time);
+  });
+
   function renderJourney() {
     const visited = state.entries.filter((e) => e.status === 'visited');
     const dated = visited.filter((e) => e.date);
     const undated = visited.filter((e) => !e.date);
 
-    // Newest first — the journey reads as a log you scroll back through.
+    // Newest day first — the journey reads as a log you scroll back through —
+    // but within a day it runs forwards, in the order the day happened.
     const byDate = [...new Set(dated.map((e) => e.date))].sort().reverse();
 
     const group = (title, list, iso, hint = '') => `
@@ -945,7 +1005,7 @@
       </article>`;
 
     const groups = byDate
-      .map((iso) => group(fmtDate(iso), dated.filter((e) => e.date === iso), iso))
+      .map((iso) => group(fmtDate(iso), byTime(dated.filter((e) => e.date === iso)), iso))
       .join('');
 
     const summary = visited.length

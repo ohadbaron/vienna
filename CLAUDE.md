@@ -44,6 +44,14 @@ duplicated across the two views and editing a journey row edits the row that was
   utility. This has already caused two bugs in `index.html`.
 - Google's Maps URLs API takes at most **9 waypoints** (`MAX_WAYPOINTS`). `routeUrl()`
   returns `{ url, dropped }` — surface `dropped`, never truncate a day silently.
+- **Everything navigates by name, with one exception.** Places from `data.js` have verified
+  `nameLatin`/`navQuery` values that Google resolves reliably, and a name lands you on the POI
+  — its entrance and car park — rather than on a coordinate that may sit in the wrong field.
+  So both the per-place nav menu (`destStr()`) and the multi-stop day route (`routePoint()`)
+  use names. The exception is a manual place whose location the user gave *as coordinates*
+  (`coordsTyped`): those are used verbatim, because they're exactly what was asked for. A
+  pasted URL is not a valid waypoint in the directions API, so link-based manual places route
+  by the place name the link resolved to; the URL itself is kept for the row's 🔗 button.
 - A short `maps.app.goo.gl` link cannot be resolved without following a redirect, which the
   app can't do offline. `parseMapsLink()` returns just `{ url }` for those, which is why the
   manual-place name field is required.
