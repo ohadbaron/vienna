@@ -14,7 +14,7 @@
   const STORE_KEY = 'austria26.state.v1';
   // Shown in the footer so you can tell at a glance which build a device is
   // actually running. Bump together with CACHE in sw.js on every deploy.
-  const APP_VERSION = '7';
+  const APP_VERSION = '8';
 
   /** Fill {token} placeholders in a UI string, e.g. fmt('nights', {n: 3}). */
   const fmt = (key, vals = {}) =>
@@ -426,6 +426,18 @@
   };
 
   /* ---------------- the timeline ---------------- */
+  /** What a pasted link actually gave us. Recomputed from the stored url at render
+   *  time rather than saved, so entries written by any version report correctly.
+   *    'coords'  — a precise pin; day routes aim straight at it
+   *    'address' — no pin, but a place/address string Maps resolves well
+   *    'nothing' — the link is opaque (maps.app.goo.gl); only the name is left
+   *    null      — no link given at all, which is a perfectly fine choice */
+  const linkQuality = (custom) => {
+    if (!custom || !custom.url) return null;
+    if (custom.coords) return 'coords';
+    return parseMapsLink(custom.url).name ? 'address' : 'nothing';
+  };
+
   /** The place an entry points at, in the shape destStr()/navBlock() expect —
    *  either the attraction from data.js or the user's own { name, navQuery }.
    *  `manual` is stamped here rather than stored, so entries saved by earlier
@@ -870,8 +882,18 @@
             <p class="text-sm font-semibold leading-tight">${visited ? '📖 ' : ''}${esc(place.name || '')}</p>
             ${latinSub(place.nameLatin)}
             ${e.custom ? `<p class="text-[10px] text-slate-400">${esc(T.entryManual)}</p>` : ''}
-            ${e.custom && e.custom.url && !e.custom.coords
-              ? `<p class="mt-1 text-[10px] leading-relaxed text-amber-700">${esc(T.entryLinkNoCoords)}</p>` : ''}
+            ${e.custom ? (() => {
+              // Show what navigation will actually aim at whenever it differs from
+              // the label — that's the question a pasted link raises, and seeing
+              // the answer beats guessing. Warn only if the link gave us nothing.
+              const q = linkQuality(e.custom);
+              const target = routePoint(entryPlace(e));
+              const shown = target && target !== e.custom.name
+                ? `<p class="mt-1 text-[10px] text-slate-400" dir="auto">🧭 ${esc(target)}</p>` : '';
+              return q === 'nothing'
+                ? `<p class="mt-1 text-[10px] leading-relaxed text-amber-700">${esc(T.entryLinkNoCoords)}</p>`
+                : shown;
+            })() : ''}
             ${e.note ? `<p class="mt-1 rounded-lg bg-slate-50 p-2 text-xs leading-relaxed text-slate-600">${esc(e.note)}</p>` : ''}
           </div>
           <div class="flex shrink-0 items-center gap-1">
@@ -1658,7 +1680,10 @@
     });
     // Pasting a link is the moment to tell the user whether we got a location out
     // of it — that's what decides whether the day route can aim at a pin.
-    $('#sheet-link').addEventListener('change', () => {
+    // React on `input`, not just `change`: `change` only fires on blur, so pasting
+    // and going straight for Save left the default help text on screen — which
+    // reads like a failure even when the link parsed fine.
+    const syncLinkHelp = () => {
       const parsed = parseMapsLink($('#sheet-link').value);
       const help = $('#sheet-link-help');
       if (parsed.name && !$('#sheet-name').value.trim()) $('#sheet-name').value = parsed.name;
@@ -1666,7 +1691,9 @@
       else if (parsed.name) help.textContent = fmt('sheetLinkParsedName', { name: parsed.name });
       else if (parsed.url) help.textContent = T.sheetLinkShort;
       else help.textContent = T.sheetLinkHelp;
-    });
+    };
+    $('#sheet-link').addEventListener('input', syncLinkHelp);
+    $('#sheet-link').addEventListener('change', syncLinkHelp);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !sheetEl().hidden) closeSheet();
     });

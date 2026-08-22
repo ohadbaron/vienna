@@ -76,7 +76,7 @@ window.I18N = {
     entryOpenLink: 'הקישור שהדבקתי',
     // A short maps.app.goo.gl link carries no coordinates, and it can't be
     // expanded offline — so the day route has nothing to aim at but the name.
-    entryLinkNoCoords: '⚠️ מהקישור לא הצלחנו לחלץ מיקום, ולכן מסלול היום יחפש לפי השם. הקישו ✎ והדביקו קואורדינטות (או קישור ארוך מ-google.com/maps/place/…).',
+    entryLinkNoCoords: '⚠️ הקישור הזה אטום (maps.app.goo.gl) — לא ניתן לחלץ ממנו מיקום, ולכן הניווט יחפש לפי השם. הקישו ✎ והדביקו קואורדינטות או קישור ארוך.',
 
     /* ---- add / edit sheet ----
      * Only strings app.js writes at runtime live here; the sheet's static labels
@@ -87,7 +87,7 @@ window.I18N = {
     sheetEdit: 'עריכת רשומה',
     sheetModePlanned: '🗓️ מתוכנן',
     sheetModeVisited: '📖 היינו שם',
-    sheetLinkHelp: 'אפשר להדביק קישור מ-Google Maps או קואורדינטות (48.2104, 16.3658). קישור מקוצר מסוג maps.app.goo.gl לא מכיל מיקום — עדיף קישור ארוך או קואורדינטות.',
+    sheetLinkHelp: 'הדביקו קישור מ-Google Maps, או קואורדינטות כמו 48.2104, 16.3658.',
     sheetNeedsName: 'צריך למלא שם מקום.',
     sheetNeedsDate: 'צריך לבחור תאריך.',
     sheetLinkParsedName: '✓ מהקישור זוהה: {name} — מסלול היום ינווט לזה.',

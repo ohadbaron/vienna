@@ -12,7 +12,7 @@
  *
  * Bump CACHE when you deploy, so old shells get evicted.
  * ------------------------------------------------------------------ */
-const CACHE = 'austria26-v7';
+const CACHE = 'austria26-v8';
 
 const SHELL = [
   './',
