@@ -16,10 +16,73 @@ window.I18N = {
 
     tabItinerary: 'מסלול',
     tabPlans: 'תכנית',
+    tabJourney: 'יומן',
     tabAttractions: 'אטרקציות',
 
     planWeatherTitle: '🌦️ ניהול לפי מזג אוויר',
-    planDaysTitle: '🗓️ יום-יום',
+
+    /* ---- planner (tab 2) ---- */
+    myPlanTitle: '🗓️ התכנית שלי',
+    suggestedDayTitle: '💡 ההצעה המוכנה ליום הזה',
+    copySuggestion: '⤵ העבר לתכנית שלי',
+    copiedSuggestion: 'הועברו {n} מקומות לתכנית.',
+    copiedNothing: 'אין באותו יום מקומות מהמאגר להעביר.',
+    planEmptyDay: 'היום הזה עוד ריק. הוסיפו מקומות מהמאגר או ידנית.',
+    planDayCount: '{n} מקומות',
+    addFromBank: '➕ הוסף מהמאגר',
+    addManual: '➕ מקום חדש',
+    sortByTime: '🕒 מיין לפי שעה',
+    sortedByTime: 'סודר לפי שעה.',
+    hotelForNight: '🏨 {name}',
+    noHotelForNight: 'אין לינה משויכת ליום הזה',
+    goToBank: 'עברו ללשונית אטרקציות והקישו ➕ לתכנית',
+
+    /* ---- day route preview ---- */
+    dayRoute: '🗺️ מסלול היום ב-Google Maps',
+    dayRouteFromHotel: 'מהמלון וחזרה',
+    dayRouteNeedsTwo: 'צריך לפחות שני מקומות (או מקום אחד + מלון) למסלול.',
+    dayRouteCapped: '⚠️ Google Maps מגביל ל-9 עצירות בדרך — {n} מקומות בסוף היום לא ייכנסו למסלול.',
+
+    /* ---- journey (tab 3) ---- */
+    journeyTitle: '📖 יומן המסע',
+    journeySummary: '{places} מקומות · {days} ימים',
+    journeyEmpty: 'היומן ריק. סמנו ✓ על מקום בתכנית, או הוסיפו רשומה ידנית.',
+    journeyAdd: '➕ הוסף ליומן',
+    journeyNoDate: 'תאריך לא ידוע',
+    journeyNoDateHint: 'סומנו כבוצעו לפני שהיומן היה קיים — הקישו ✎ להוספת תאריך ושעה.',
+
+    /* ---- entry rows ---- */
+    entryMarkVisited: 'סמן שביקרנו',
+    entryUnvisit: 'החזר לתכנית',
+    entryEdit: 'עריכה',
+    entryUp: 'הזז למעלה',
+    entryDown: 'הזז למטה',
+    entryManual: 'מקום שהוספתי',
+    entryOpenLink: 'הקישור שהדבקתי',
+
+    /* ---- add / edit sheet ----
+     * Only strings app.js writes at runtime live here; the sheet's static labels
+     * (שם המקום, תאריך, שמור …) are hardcoded in index.html like every other
+     * static label in this app. */
+    sheetAddToPlan: 'הוספה לתכנית',
+    sheetAddToJourney: 'הוספה ליומן',
+    sheetEdit: 'עריכת רשומה',
+    sheetModePlanned: '🗓️ מתוכנן',
+    sheetModeVisited: '📖 היינו שם',
+    sheetLinkHelp: 'קישור ארוך → נחלץ ממנו שם וקואורדינטות. קישור מקוצר יישמר ויפתח כמו שהוא.',
+    sheetNeedsName: 'צריך למלא שם מקום.',
+    sheetNeedsDate: 'צריך לבחור תאריך.',
+    sheetLinkParsedName: 'זוהה מהקישור: {name}',
+    sheetLinkParsedCoords: 'זוהו קואורדינטות מהקישור.',
+    sheetLinkShort: 'קישור מקוצר — לא ניתן לפענח אותו במצב לא מקוון, אז צריך למלא שם.',
+
+    /* ---- toasts ---- */
+    addedToPlan: 'נוסף לתכנית · {date}',
+    addedToJourney: 'נוסף ליומן · {date}',
+    entrySaved: 'נשמר.',
+    entryRemoved: 'נמחק.',
+    markedVisited: 'מעולה — עבר ליומן.',
+    backToPlan: 'הוחזר לתכנית.',
 
     weatherAll: 'הכול',
     weatherSun: '☀️ שמש',
@@ -28,6 +91,7 @@ window.I18N = {
 
     statusAll: 'הכול',
     statusFav: '⭐ מועדפים',
+    statusPlanned: '🗓️ מתוכנן',
     statusTodo: '○ טרם בוצע',
     statusDone: '✅ בוצע',
 
@@ -58,14 +122,22 @@ window.I18N = {
     navigateHere: 'נווט לכאן',
     navigateAirport: 'נווט לשדה התעופה',
     navigate: 'נווט',
-    navigateMaps: 'נווט עם Google Maps',
-    showOnMap: 'הצג במפה',
+    // The nav menu opens the place by name in each app; the user taps
+    // "navigate" inside Maps/Waze themselves.
+    showInGoogleMaps: 'Google Maps',
+    showInAppleMaps: 'Apple Maps',
+    showInWaze: 'Waze',
+    showInGoogleSearch: 'חיפוש בגוגל',
     website: 'אתר רשמי',
     websiteSearch: 'חיפוש בגוגל',
     favAdd: 'למועדפים',
     favOn: 'מועדף',
-    doneAdd: 'סמן כבוצע',
-    doneOn: 'בוצע',
+    // The ✅ button now opens the sheet (date + time) instead of a silent toggle.
+    doneAdd: 'היינו שם',
+    doneOn: 'ביקרנו',
+    planAdd: 'לתכנית',
+    cardPlanned: '🗓️ מתוכנן {date}',
+    cardVisited: '📖 ביקרנו {date}',
 
     stopoverIdeas: 'רעיונות לעצירה בדרך ({n})',
     today: 'היום',

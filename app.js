@@ -27,12 +27,36 @@
     categories: new Set(), // empty = all
     weather: 'all',        // all | sun | rain
     region: 'all',         // all | <region id>
-    status: 'all',         // all | fav | todo | done
+    statuses: new Set(),   // subset of fav | planned | todo | done; empty = all.
+                           // ANDed, so ⭐+○ means "favorites I haven't done yet".
     minRank: 1,
     position: null,        // { lat, lng, at } — last known GPS fix
     locating: false,
     favorites: new Set(),  // attraction ids marked ⭐
-    done: new Set(),       // attraction ids marked ✅
+
+    // ---- the timeline: one dated list behind both the planner and the journey.
+    // An entry is either 'planned' (intent) or 'visited' (it happened); checking
+    // one off flips it in place, so nothing is ever duplicated between views.
+    // Array order is the route order within a day — see moveEntry / sortDayByTime.
+    entries: [],
+    entrySeq: 0,           // monotonic id counter; survives deletions
+    planDay: null,         // 'YYYY-MM-DD' currently shown in the planner
+    routeFromHotel: true,  // day-route preview bookends with that night's hotel
+
+    // Derived from `entries` by reindex(), never persisted.
+    visitedRefs: new Set(),
+    plannedRefs: new Set(),
+  };
+
+  /** Rebuild the fast lookups the attraction bank paints from. Cheaper than
+   *  scanning `entries` per card, and keeps the status filter O(1). */
+  const reindex = () => {
+    state.visitedRefs = new Set();
+    state.plannedRefs = new Set();
+    for (const e of state.entries) {
+      if (!e.ref) continue;
+      (e.status === 'visited' ? state.visitedRefs : state.plannedRefs).add(e.ref);
+    }
   };
 
   // Filters survive a page reload; the GPS fix does too, so reopening the app
@@ -45,11 +69,14 @@
         categories: [...state.categories],
         weather: state.weather,
         region: state.region,
-        status: state.status,
+        statuses: [...state.statuses],
         minRank: state.minRank,
         position: state.position,
         favorites: [...state.favorites],
-        done: [...state.done],
+        entries: state.entries,
+        entrySeq: state.entrySeq,
+        planDay: state.planDay,
+        routeFromHotel: state.routeFromHotel,
       }));
     } catch (_) { /* private browsing — filters just won't persist */ }
   };
@@ -62,15 +89,38 @@
       if (Array.isArray(raw.categories)) state.categories = new Set(raw.categories);
       if (raw.weather) state.weather = raw.weather;
       if (raw.region) state.region = raw.region;
-      if (raw.status) state.status = raw.status;
+      if (Array.isArray(raw.statuses)) {
+        state.statuses = new Set(raw.statuses);
+      } else if (raw.status && raw.status !== 'all') {
+        // Migrate the pre-multiselect single `status` string. Never bump
+        // STORE_KEY for a shape change — that would wipe favorites too.
+        state.statuses = new Set([raw.status]);
+      }
       if (raw.minRank) state.minRank = Number(raw.minRank);
       // Stale fixes are worse than none — a day-old position gives wrong distances.
       if (raw.position && Date.now() - raw.position.at < 6 * 60 * 60 * 1000) {
         state.position = raw.position;
       }
       if (Array.isArray(raw.favorites)) state.favorites = new Set(raw.favorites);
-      if (Array.isArray(raw.done)) state.done = new Set(raw.done);
+
+      if (Array.isArray(raw.entries)) {
+        // Drop anything that no longer points at a real attraction (an id could
+        // have been retired from data.js) but keep every manual entry.
+        state.entries = raw.entries.filter((e) => e && (e.custom || ATTR.has(e.ref)));
+      } else if (Array.isArray(raw.done)) {
+        // Migrate the pre-journey `done` Set. Those markers carry no time, so
+        // they land with an empty date and the journey groups them under
+        // "תאריך לא ידוע" with a prompt to fill it in.
+        state.entries = raw.done.filter((id) => ATTR.has(id)).map((id, i) => ({
+          id: `e${i + 1}`, ref: id, custom: null,
+          date: '', time: '', status: 'visited', note: '',
+        }));
+      }
+      state.entrySeq = Number(raw.entrySeq) || state.entries.length;
+      if (raw.planDay) state.planDay = raw.planDay;
+      if (typeof raw.routeFromHotel === 'boolean') state.routeFromHotel = raw.routeFromHotel;
     } catch (_) { /* ignore corrupt state */ }
+    reindex();
   };
 
   /* ---------------- lookups ---------------- */
@@ -85,24 +135,32 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  /** Destination string for map links. Prefers navQuery (a name search beats a
-   *  pin for restaurants/hotels), falls back to coordinates, then name/address. */
-  const destStr = (t) =>
-    t.navQuery || (t.coords ? `${t.coords.lat},${t.coords.lng}` : (t.name || t.address || ''));
+  /** Name-based destination string for every map / search link.
+   *  A name beats a pin: Maps resolves it to the real POI, so you land on the
+   *  place page (hours, reviews, entrance) and routing goes to the car park
+   *  rather than to a point in a field. Coordinates are the last resort only.
+   *  Order: navQuery (hand-tuned) -> nameLatin -> name -> address -> coords. */
+  const destStr = (t) => {
+    if (t.navQuery) return t.navQuery;
+    // Latin names sometimes carry a gloss — "Stift Melk (Melk Abbey)" — which
+    // only confuses a search box.
+    const base = (t.nameLatin || '').replace(/\s*\([^)]*\)/g, '').trim()
+      || t.name || t.address || '';
+    if (!base) return t.coords ? `${t.coords.lat},${t.coords.lng}` : '';
+    // nameLatin usually names the town but not the country; adding one keeps
+    // Maps from matching a same-named place on another continent.
+    return /austria|österreich|israel|, at$/i.test(base) ? base : `${base}, Austria`;
+  };
 
-  // Google Maps driving directions.
-  const navUrl = (t) =>
-    `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(destStr(t))}`;
-  // Google Maps — show the place (view/search, no directions).
-  const mapUrl = (t) =>
+  // All four open the place — the user taps "navigate" inside the app they chose.
+  const gmapsUrl = (t) =>
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destStr(t))}`;
-  // Waze — coordinates are most reliable; fall back to a text query.
-  const wazeUrl = (t) =>
-    t.coords ? `https://waze.com/ul?ll=${t.coords.lat},${t.coords.lng}&navigate=yes`
-      : `https://waze.com/ul?q=${encodeURIComponent(destStr(t))}&navigate=yes`;
-  // Apple Maps driving directions.
   const appleUrl = (t) =>
-    `https://maps.apple.com/?daddr=${encodeURIComponent(destStr(t))}&dirflg=d`;
+    `https://maps.apple.com/?q=${encodeURIComponent(destStr(t))}`;
+  const wazeUrl = (t) =>
+    `https://waze.com/ul?q=${encodeURIComponent(destStr(t))}`;
+  const googleSearchUrl = (t) =>
+    `https://www.google.com/search?q=${encodeURIComponent(destStr(t))}`;
 
   /** Great-circle distance in km. */
   const haversine = (a, b) => {
@@ -133,9 +191,188 @@
   const fmtDate = (iso) =>
     parseDate(iso).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' });
   const daysBetween = (a, b) => Math.round((b - a) / DAY_MS);
+  const isoOf = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const hhmmNow = () => {
+    const n = new Date();
+    return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+  };
+  /** Short label for a day chip: "ג׳ 19/8". */
+  const fmtDayShort = (iso) => {
+    const d = parseDate(iso);
+    return `${d.toLocaleDateString('he-IL', { weekday: 'narrow' })} ${d.getDate()}/${d.getMonth() + 1}`;
+  };
 
-  const WEATHER_ICON = { sun: '☀️', rain: '🌧️', any: '🌤️' };
-  const WEATHER_TEXT = { sun: T.weatherTextSun, rain: T.weatherTextRain, any: T.weatherTextAny };
+  /* ---------------- trip calendar ---------------- */
+  /** Every date of the trip as an ISO string, inclusive of both ends. */
+  const tripDays = () => {
+    const out = [];
+    const start = parseDate(D.trip.startDate);
+    const n = daysBetween(start, parseDate(D.trip.endDate));
+    for (let i = 0; i <= n; i++) out.push(isoOf(new Date(start.getTime() + i * DAY_MS)));
+    return out;
+  };
+
+  /** The accommodation you sleep at on `date` — checkIn <= date < checkOut, the
+   *  same window renderItinerary() uses for its "staying now" badge. */
+  const hotelOn = (iso) => {
+    if (!iso) return null;
+    const d = parseDate(iso);
+    return D.accommodations.find((h) => d >= parseDate(h.checkIn) && d < parseDate(h.checkOut)) || null;
+  };
+
+  /* ---------------- pasted Google Maps links ---------------- */
+  /** Pull what we can out of whatever the user pasted, offline.
+   *  Returns { name?, coords?, url? } — all optional, any combination.
+   *  A short maps.app.goo.gl link can only be resolved by following a redirect,
+   *  which we can't do offline, so it comes back as { url } and the sheet keeps
+   *  insisting on a name. */
+  const parseMapsLink = (raw) => {
+    const s = String(raw || '').trim();
+    if (!s) return {};
+    const out = {};
+    const isUrl = /^https?:\/\//i.test(s);
+    if (isUrl) out.url = s;
+
+    // "48.2287, 16.3423" typed or pasted straight in.
+    const bare = s.match(/^\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);
+    if (bare) return { coords: { lat: Number(bare[1]), lng: Number(bare[2]) } };
+
+    if (!isUrl) return { name: s };
+
+    // Place name: /maps/place/Some+Name/@... — the most useful part of a long link.
+    const place = s.match(/\/maps\/place\/([^/@?]+)/);
+    if (place) {
+      try {
+        const name = decodeURIComponent(place[1].replace(/\+/g, ' ')).trim();
+        if (name) out.name = name;
+      } catch (_) { /* malformed %-escape — just skip the name */ }
+    }
+
+    // Coordinates: @lat,lng,zoom is the viewport; !3dlat!4dlng is the actual pin,
+    // so prefer the pin when both are present.
+    const pin = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    const at = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    const hit = pin || at;
+    if (hit) out.coords = { lat: Number(hit[1]), lng: Number(hit[2]) };
+
+    // ?q= / ?query= / ?destination= carry either coordinates or a name.
+    const q = s.match(/[?&](?:q|query|destination|daddr)=([^&]+)/);
+    if (q) {
+      let val = q[1];
+      try { val = decodeURIComponent(val.replace(/\+/g, ' ')); } catch (_) { /* keep raw */ }
+      const qc = val.match(/^\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);
+      if (qc) out.coords = out.coords || { lat: Number(qc[1]), lng: Number(qc[2]) };
+      else if (!out.name && val.trim()) out.name = val.trim();
+    }
+    return out;
+  };
+
+  /** Build the { name, navQuery, url, coords } shape the rest of the app treats
+   *  like a data.js place — so destStr() and every nav link work unchanged. */
+  const makeCustom = (name, link) => {
+    const parsed = parseMapsLink(link);
+    const label = (name || '').trim() || parsed.name || '';
+    return {
+      name: label,
+      // A pasted URL is the most precise thing we have; keep it for the "open"
+      // button. navQuery is what destStr() will use for a name search.
+      navQuery: parsed.coords && !label
+        ? `${parsed.coords.lat},${parsed.coords.lng}`
+        : label,
+      url: parsed.url || '',
+      coords: parsed.coords || null,
+    };
+  };
+
+  /* ---------------- multi-stop day route ---------------- */
+  // Google's Maps URLs API takes at most 9 waypoints between origin and
+  // destination. More than that and we keep the first 9 and say so.
+  const MAX_WAYPOINTS = 9;
+
+  /** A driving route through `stops` (each a place-shaped object destStr() knows
+   *  how to read). With `hotel`, it starts and ends there.
+   *  Returns { url, dropped } — dropped > 0 means the day didn't fit. */
+  const routeUrl = (stops, hotel) => {
+    if (!stops.length) return { url: '', dropped: 0 }; // hotel → hotel is not a route
+    const places = [...(hotel ? [hotel] : []), ...stops, ...(hotel ? [hotel] : [])];
+    if (places.length < 2) return { url: '', dropped: 0 };
+
+    const origin = places[0];
+    const destination = places[places.length - 1];
+    const middle = places.slice(1, -1);
+    const dropped = Math.max(0, middle.length - MAX_WAYPOINTS);
+    const kept = middle.slice(0, MAX_WAYPOINTS);
+
+    const q = (t) => encodeURIComponent(destStr(t));
+    const params = [
+      'api=1',
+      'travelmode=driving',
+      `origin=${q(origin)}`,
+      `destination=${q(destination)}`,
+    ];
+    if (kept.length) params.push(`waypoints=${kept.map(q).join('|')}`);
+    return { url: `https://www.google.com/maps/dir/?${params.join('&')}`, dropped };
+  };
+
+  /* ---------------- the timeline ---------------- */
+  /** The place an entry points at, in the shape destStr()/navBlock() expect —
+   *  either the attraction from data.js or the user's own { name, navQuery }. */
+  const entryPlace = (e) => (e.ref ? ATTR.get(e.ref) : e.custom) || { name: '' };
+  const entryName = (e) => entryPlace(e).name || '';
+
+  /** Entries on a day, in route order. Array order is deliberate: setting a time
+   *  does not silently reshuffle rows under the user's thumb — sortDayByTime()
+   *  does that on request. */
+  const dayEntries = (iso, status = null) =>
+    state.entries.filter((e) => e.date === iso && (!status || e.status === status));
+
+  const findEntry = (id) => state.entries.find((e) => e.id === id);
+
+  const addEntry = ({ ref = null, custom = null, date, time = '', status = 'planned', note = '' }) => {
+    const e = { id: `e${++state.entrySeq}`, ref, custom, date, time, status, note };
+    state.entries.push(e);
+    reindex();
+    return e;
+  };
+
+  const removeEntry = (id) => {
+    const i = state.entries.findIndex((e) => e.id === id);
+    if (i >= 0) state.entries.splice(i, 1);
+    reindex();
+  };
+
+  /** Nudge an entry one slot within its own day; the array holds every day at
+   *  once, so swap against the previous/next entry *of the same date*. */
+  const moveEntry = (id, dir) => {
+    const e = findEntry(id);
+    if (!e) return;
+    const sameDay = state.entries.filter((x) => x.date === e.date);
+    const at = sameDay.indexOf(e);
+    const swapWith = sameDay[at + dir];
+    if (!swapWith) return;
+    const i = state.entries.indexOf(e);
+    const j = state.entries.indexOf(swapWith);
+    state.entries[i] = swapWith;
+    state.entries[j] = e;
+  };
+
+  /** Order a day by clock time. Untimed rows keep their relative order and sink
+   *  to the bottom — you can't route through a stop with no time slot anyway. */
+  const sortDayByTime = (iso) => {
+    const day = dayEntries(iso);
+    const sorted = [...day].sort((a, b) => {
+      if (!a.time && !b.time) return day.indexOf(a) - day.indexOf(b);
+      if (!a.time) return 1;
+      if (!b.time) return -1;
+      return a.time.localeCompare(b.time);
+    });
+    // Write back into the same slots the day occupied, leaving other days alone.
+    const slots = state.entries.reduce((acc, e, i) => (e.date === iso ? [...acc, i] : acc), []);
+    slots.forEach((slot, k) => { state.entries[slot] = sorted[k]; });
+  };
+
+  const WEATHER_ICON = { sun: '☀️', rain: '🌧️', any: '🌤️' };  const WEATHER_TEXT = { sun: T.weatherTextSun, rain: T.weatherTextRain, any: T.weatherTextAny };
 
   const PRIO_STYLE = {
     must: 'bg-rose-100 text-rose-700 ring-rose-200',
@@ -153,8 +390,9 @@
   };
 
   /* ---------------- shared card bits ---------------- */
-  // A single navigation control: a "נווט" button that expands to Waze / Google /
-  // Apple directions plus "show on map". Used on every place across the app.
+  // A single navigation control: a "נווט" button that expands to the four ways
+  // of opening the place — Google Maps, Apple Maps, Waze, plain Google search.
+  // Used on every place across the app.
   const navOpt = (href, label) =>
     `<a href="${href}" target="_blank" rel="noopener"
         class="flex items-center justify-center gap-1 rounded-lg bg-slate-100 px-2 py-2 text-slate-700 active:scale-95 transition">${label}</a>`;
@@ -165,10 +403,10 @@
         <span>🧭</span><span>${esc(label)}</span>
       </summary>
       <div class="mt-2 grid grid-cols-2 gap-1.5 text-[12px] font-semibold">
-        ${navOpt(wazeUrl(t), '🚗 Waze')}
-        ${navOpt(navUrl(t), '🗺️ Google')}
-        ${navOpt(appleUrl(t), '🍎 Apple')}
-        ${navOpt(mapUrl(t), `📍 ${esc(T.showOnMap)}`)}
+        ${navOpt(gmapsUrl(t), `🗺️ ${esc(T.showInGoogleMaps)}`)}
+        ${navOpt(appleUrl(t), `🍎 ${esc(T.showInAppleMaps)}`)}
+        ${navOpt(wazeUrl(t), `🚗 ${esc(T.showInWaze)}`)}
+        ${navOpt(googleSearchUrl(t), `🔎 ${esc(T.showInGoogleSearch)}`)}
       </div>
     </details>`;
 
@@ -182,7 +420,7 @@
         on ? `⭐ ${esc(T.favOn)}` : `☆ ${esc(T.favAdd)}`}</button>`;
   };
   const doneBtnHtml = (id) => {
-    const on = state.done.has(id);
+    const on = state.visitedRefs.has(id);
     return `<button data-done="${id}" type="button" aria-pressed="${on}"
       class="flex-1 rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition ${
         on ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : 'bg-white text-slate-500 ring-slate-200'}">${
@@ -196,8 +434,7 @@
    *  otherwise falls back to a Google search for the place, so the button is
    *  never a dead 404 — the user still lands on hours / menu / reviews. */
   const siteLink = (t) => {
-    const href = t.website
-      || `https://www.google.com/search?q=${encodeURIComponent(t.navQuery || t.name || t.address || '')}`;
+    const href = t.website || googleSearchUrl(t);
     const label = t.website ? `🌐 ${esc(T.website)}` : `🔎 ${esc(T.websiteSearch)}`;
     return `<a href="${esc(href)}" target="_blank" rel="noopener" dir="ltr"
          class="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 active:opacity-70">${label} ↗</a>`;
@@ -206,6 +443,141 @@
   /** Small gray subtitle showing the original Latin place name under a
    *  Hebrew heading — helps matching against road signs and Maps results. */
   const latinSub = (latin) => latin ? `<p class="text-xs text-slate-400" dir="ltr">${esc(latin)}</p>` : '';
+
+  /* ================================================================
+   *  ADD / EDIT SHEET
+   *  One sheet, four jobs: plan a place, log a visit, add a manual place,
+   *  edit an existing entry. Everything writes through saveSheet().
+   * ================================================================ */
+  // What the sheet is currently working on. `entryId` set = editing.
+  let sheetCtx = null;
+
+  const sheetEl = () => $('#sheet');
+
+  /** @param ctx { entryId? , ref?, custom?: true, mode?: 'planned'|'visited', date?, time? } */
+  function openSheet(ctx) {
+    const editing = !!ctx.entryId;
+    const e = editing ? findEntry(ctx.entryId) : null;
+    if (editing && !e) return;
+
+    const manual = editing ? !!e.custom : !!ctx.custom;
+    sheetCtx = {
+      entryId: ctx.entryId || null,
+      ref: editing ? e.ref : (ctx.ref || null),
+      manual,
+      mode: editing ? e.status : (ctx.mode || 'planned'),
+    };
+
+    const place = editing ? entryPlace(e) : (sheetCtx.ref ? ATTR.get(sheetCtx.ref) : null);
+    $('#sheet-title').textContent = editing ? T.sheetEdit
+      : sheetCtx.mode === 'visited' ? T.sheetAddToJourney : T.sheetAddToPlan;
+    $('#sheet-place').textContent = place ? (place.nameLatin || place.name || '') : '';
+    $('#sheet-place').hidden = !place;
+
+    // Manual fields
+    $('#sheet-manual').hidden = !manual;
+    $('#sheet-name').value = manual && place ? place.name || '' : '';
+    $('#sheet-link').value = manual && place ? place.url || '' : '';
+    $('#sheet-link-help').textContent = T.sheetLinkHelp;
+
+    // Date: today if it falls inside the trip, otherwise day one.
+    const days = tripDays();
+    const nowIso = isoOf(new Date());
+    const fallback = days.includes(nowIso) ? nowIso : (state.planDay || days[0]);
+    $('#sheet-date').value = editing ? e.date : (ctx.date || fallback);
+    $('#sheet-date').min = days[0];
+    $('#sheet-date').max = days[days.length - 1];
+    $('#sheet-time').value = editing ? e.time
+      : (ctx.time ?? (sheetCtx.mode === 'visited' ? hhmmNow() : ''));
+    $('#sheet-note').value = editing ? e.note || '' : '';
+
+    $('#sheet-delete').hidden = !editing;
+    paintSheet();
+
+    $('#sheet-backdrop').hidden = false;
+    sheetEl().hidden = false;
+    document.body.style.overflow = 'hidden'; // don't scroll the page under the sheet
+    if (manual) $('#sheet-name').focus();
+  }
+
+  function closeSheet() {
+    sheetCtx = null;
+    sheetEl().hidden = true;
+    $('#sheet-backdrop').hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  /** Repaint the two bits of the sheet that depend on live choices: the
+   *  planned/visited toggle and the day quick-pick. */
+  function paintSheet() {
+    if (!sheetCtx) return;
+    const chosen = $('#sheet-date').value;
+
+    $('#sheet-mode').innerHTML = [
+      { id: 'planned', label: T.sheetModePlanned },
+      { id: 'visited', label: T.sheetModeVisited },
+    ].map((m) => `
+      <button data-sheet-mode="${m.id}" type="button" aria-pressed="${m.id === sheetCtx.mode}"
+        class="seg-btn flex-1 rounded-md px-2.5 py-1.5 font-medium transition ${
+          m.id === sheetCtx.mode ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}">${m.label}</button>`).join('');
+
+    $('#sheet-days').innerHTML = tripDays().map((iso) => {
+      const n = dayEntries(iso).length;
+      const on = iso === chosen;
+      return `<button data-sheet-day="${iso}" type="button"
+        class="shrink-0 rounded-full border px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap transition ${
+          on ? 'border-ink bg-ink text-white shadow-sm' : 'border-slate-300 bg-white text-slate-600'}">${
+        esc(fmtDayShort(iso))}${n ? ` · ${n}` : ''}</button>`;
+    }).join('');
+  }
+
+  function saveSheet() {
+    if (!sheetCtx) return;
+    const date = $('#sheet-date').value;
+    const time = $('#sheet-time').value;
+    const note = $('#sheet-note').value.trim();
+    const status = sheetCtx.mode;
+
+    if (!date) { toast(T.sheetNeedsDate); return; }
+
+    let custom = null;
+    if (sheetCtx.manual) {
+      const name = $('#sheet-name').value.trim();
+      const link = $('#sheet-link').value.trim();
+      if (!name) { toast(T.sheetNeedsName); return; }
+      custom = makeCustom(name, link);
+    }
+
+    const existing = sheetCtx.entryId ? findEntry(sheetCtx.entryId) : null;
+    if (existing) {
+      Object.assign(existing, { date, time, note, status });
+      if (custom) existing.custom = custom;
+      reindex();
+      toast(T.entrySaved);
+    } else {
+      addEntry({ ref: sheetCtx.ref, custom, date, time, status, note });
+      toast(fmt(status === 'visited' ? 'addedToJourney' : 'addedToPlan', { date: fmtDayShort(date) }));
+    }
+
+    // Land the user on the day they just filed something under.
+    state.planDay = date;
+    persist();
+    closeSheet();
+    renderPlanner();
+    renderJourney();
+    renderAttractions();
+  }
+
+  function deleteFromSheet() {
+    if (!sheetCtx?.entryId) return;
+    removeEntry(sheetCtx.entryId);
+    persist();
+    closeSheet();
+    toast(T.entryRemoved);
+    renderPlanner();
+    renderJourney();
+    renderAttractions();
+  }
 
   /* ================================================================
    *  TAB 1 — ITINERARY & ACCOMMODATIONS
@@ -355,59 +727,251 @@
     </div>`;
 
   /* ================================================================
-   *  TAB 2 — READY-MADE DAY PLANS
+   *  TAB 2 — MY PLAN (per day) + the ready-made suggestion for that day
    * ================================================================ */
-  function renderPlans() {
-    const P = D.plans;
-    if (!P) { $('#view-plans').innerHTML = ''; return; }
+
+  /** The day the planner opens on: whatever was last used, else today if we're
+   *  mid-trip, else day one. */
+  function activeDay() {
+    const days = tripDays();
+    if (state.planDay && days.includes(state.planDay)) return state.planDay;
+    const nowIso = isoOf(new Date());
+    return days.includes(nowIso) ? nowIso : days[0];
+  }
+
+  /** One row of the timeline, used by both the planner and the journey. */
+  function entryRow(e, { showMove }) {
+    const place = entryPlace(e);
+    const visited = e.status === 'visited';
+    const iconBtn = (attr, label, glyph, cls = 'bg-slate-100 text-slate-500') =>
+      `<button ${attr}="${e.id}" type="button" aria-label="${esc(label)}"
+         class="shrink-0 rounded-lg ${cls} px-2 py-1.5 text-xs leading-none active:scale-90 transition">${glyph}</button>`;
+
+    return `
+      <li data-entry="${e.id}" class="rounded-xl border border-slate-200 bg-white p-2.5">
+        <div class="flex items-start gap-2">
+          <span class="shrink-0 pt-0.5 text-[11px] font-semibold tabular-nums ${
+            e.time ? 'text-slate-500' : 'text-slate-300'}" dir="ltr">${esc(e.time || '--:--')}</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold leading-tight">${visited ? '📖 ' : ''}${esc(place.name || '')}</p>
+            ${latinSub(place.nameLatin)}
+            ${e.custom ? `<p class="text-[10px] text-slate-400">${esc(T.entryManual)}</p>` : ''}
+            ${e.note ? `<p class="mt-1 rounded-lg bg-slate-50 p-2 text-xs leading-relaxed text-slate-600">${esc(e.note)}</p>` : ''}
+          </div>
+          <div class="flex shrink-0 items-center gap-1">
+            ${showMove ? iconBtn('data-entry-up', T.entryUp, '▲') + iconBtn('data-entry-down', T.entryDown, '▼') : ''}
+            ${visited
+              ? iconBtn('data-entry-unvisit', T.entryUnvisit, '↩')
+              : iconBtn('data-entry-visit', T.entryMarkVisited, '✓', 'bg-emerald-100 text-emerald-700')}
+            ${iconBtn('data-entry-edit', T.entryEdit, '✎')}
+          </div>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          ${place.url ? `<a href="${esc(place.url)}" target="_blank" rel="noopener"
+            class="rounded-lg bg-slate-100 px-2 py-2 text-[12px] font-semibold text-slate-700 active:scale-95 transition">🔗 ${esc(T.entryOpenLink)}</a>` : ''}
+          <div class="min-w-0 flex-1">${navBlock(place, place.name || T.navigate, 'inline')}</div>
+        </div>
+      </li>`;
+  }
+
+  /** The "see the whole day in Google Maps" control. */
+  function routeBlock(iso, stops) {
+    const hotel = state.routeFromHotel ? hotelOn(iso) : null;
+    const { url, dropped } = routeUrl(stops.map(entryPlace), hotel);
+    const toggle = `
+      <button data-route-hotel type="button" aria-pressed="${state.routeFromHotel}"
+        class="rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition ${
+          state.routeFromHotel
+            ? 'bg-ink text-white ring-ink'
+            : 'bg-white text-slate-500 ring-slate-300'}">🏨 ${esc(T.dayRouteFromHotel)}</button>`;
+
+    if (!url) {
+      return `
+        <div class="mt-2 space-y-1.5">
+          <p class="text-[11px] text-slate-400">${esc(T.dayRouteNeedsTwo)}</p>
+          <div>${toggle}</div>
+        </div>`;
+    }
+    return `
+      <div class="mt-2 space-y-1.5">
+        <a href="${esc(url)}" target="_blank" rel="noopener"
+           class="flex w-full items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.98] transition">
+          ${esc(T.dayRoute)}
+        </a>
+        <div class="flex items-center gap-2">
+          ${toggle}
+          ${hotel ? `<span class="truncate text-[11px] text-slate-400">${esc(fmt('hotelForNight', { name: hotel.name }))}</span>` : ''}
+        </div>
+        ${dropped ? `<p class="text-[11px] leading-relaxed text-amber-700">${esc(fmt('dayRouteCapped', { n: dropped }))}</p>` : ''}
+      </div>`;
+  }
+
+  function renderPlanner() {
+    const iso = activeDay();
+    state.planDay = iso;
     const t = today();
 
-    const legend = P.weatherLegend.map((w) => `
-      <div class="flex items-start gap-2 text-xs">
-        <span class="text-base leading-none">${w.icon}</span>
-        <div><span class="font-semibold">${esc(w.when)}</span> — <span class="text-slate-600">${esc(w.ideas)}</span></div>
-      </div>`).join('');
-
-    const days = P.days.map((d) => {
-      const isToday = daysBetween(t, parseDate(d.date)) === 0;
-      const steps = d.steps.map((s) => {
-        // A step links either to an attraction (by id) or a free nav target.
-        const linked = s.ref ? ATTR.get(s.ref) : null;
-        const navTarget = linked || s.nav || null;
-        const navName = linked ? linked.name : (s.nav ? s.nav.name : T.navigate);
-        return `
-          <li class="flex gap-2">
-            <span class="shrink-0 w-14 pt-0.5 text-[11px] font-semibold text-slate-400 tabular-nums">${esc(s.when || '')}</span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm leading-relaxed text-slate-700">${esc(s.text)}</p>
-              ${navTarget ? `<div class="mt-1">${navBlock(navTarget, navName, 'inline')}</div>` : ''}
-            </div>
-          </li>`;
-      }).join('');
-
-      return `
-        <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ${isToday ? 'ring-emerald-300' : 'ring-transparent'}">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            ${esc(fmtDate(d.date))}${isToday ? ` · ${T.today}` : ''} · ${esc(d.base)}
-          </p>
-          <h3 class="font-bold leading-tight">${esc(d.title)}</h3>
-          <ul class="mt-3 space-y-2">${steps}</ul>
-          ${d.note ? `<p class="mt-3 rounded-xl bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900">${esc(d.note)}</p>` : ''}
-        </article>`;
+    /* --- day rail --- */
+    const rail = tripDays().map((d) => {
+      const n = dayEntries(d).length;
+      const on = d === iso;
+      const isToday = daysBetween(t, parseDate(d)) === 0;
+      return `<button data-plan-day="${d}" type="button"
+        class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition ${
+          on ? 'border-ink bg-ink text-white shadow-sm'
+            : isToday ? 'border-emerald-400 bg-white text-emerald-700'
+              : 'border-slate-300 bg-white text-slate-600'}">${
+        esc(fmtDayShort(d))}${n ? ` · ${n}` : ''}</button>`;
     }).join('');
 
+    /* --- the user's own plan for the day --- */
+    const planned = dayEntries(iso, 'planned');
+    const visited = dayEntries(iso, 'visited');
+    const hotel = hotelOn(iso);
+
+    const rows = [...planned, ...visited];
+    const body = rows.length
+      ? `<ul class="space-y-2">${rows.map((e) => entryRow(e, { showMove: rows.length > 1 })).join('')}</ul>`
+      : `<p class="rounded-xl bg-slate-50 p-4 text-center text-xs leading-relaxed text-slate-500">
+           ${esc(T.planEmptyDay)}<br>${esc(T.goToBank)}
+         </p>`;
+
+    const myPlan = `
+      <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ${
+        daysBetween(t, parseDate(iso)) === 0 ? 'ring-emerald-300' : 'ring-transparent'}">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">${esc(fmtDate(iso))}</p>
+            <h3 class="font-bold leading-tight">${esc(T.myPlanTitle)}</h3>
+            <p class="text-xs text-slate-500">${
+              hotel ? esc(fmt('hotelForNight', { name: hotel.name })) : esc(T.noHotelForNight)}</p>
+          </div>
+          ${rows.length ? chip(fmt('planDayCount', { n: rows.length }), 'bg-indigo-50 text-indigo-700 ring-indigo-200') : ''}
+        </div>
+
+        ${routeBlock(iso, rows)}
+
+        <div class="mt-3">${body}</div>
+
+        <div class="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">
+          <button data-goto-bank type="button"
+            class="rounded-xl bg-slate-100 px-3 py-2 text-slate-700 active:scale-95 transition">${esc(T.addFromBank)}</button>
+          <button data-add-manual="${iso}" type="button"
+            class="rounded-xl bg-slate-100 px-3 py-2 text-slate-700 active:scale-95 transition">${esc(T.addManual)}</button>
+          ${rows.length > 1 ? `<button data-sort-day="${iso}" type="button"
+            class="rounded-xl bg-slate-100 px-3 py-2 text-slate-700 active:scale-95 transition">${esc(T.sortByTime)}</button>` : ''}
+        </div>
+      </article>`;
+
+    /* --- the hand-written suggestion for the same date, collapsed underneath --- */
+    const P = D.plans;
+    const suggested = P?.days?.find((d) => d.date === iso);
+    const suggestion = suggested ? `
+      <article class="overflow-hidden rounded-2xl bg-white shadow-sm">
+        <details>
+          <summary class="flex items-start gap-3 p-4">
+            <div class="min-w-0 flex-1">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">${esc(T.suggestedDayTitle)}</p>
+              <h3 class="font-bold leading-tight">${esc(suggested.title)}</h3>
+              <p class="text-xs text-slate-500">${esc(suggested.base)}</p>
+            </div>
+            <span class="chev shrink-0 pt-1 text-slate-400 transition-transform">▾</span>
+          </summary>
+          <div class="px-4 pb-4">
+            <ul class="space-y-2">
+              ${suggested.steps.map((s) => {
+                const linked = s.ref ? ATTR.get(s.ref) : null;
+                const navTarget = linked || s.nav || null;
+                const navName = linked ? linked.name : (s.nav ? s.nav.name : T.navigate);
+                return `
+                  <li class="flex gap-2">
+                    <span class="shrink-0 w-14 pt-0.5 text-[11px] font-semibold text-slate-400 tabular-nums">${esc(s.when || '')}</span>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm leading-relaxed text-slate-700">${esc(s.text)}</p>
+                      ${navTarget ? `<div class="mt-1">${navBlock(navTarget, navName, 'inline')}</div>` : ''}
+                    </div>
+                  </li>`;
+              }).join('')}
+            </ul>
+            ${suggested.note ? `<p class="mt-3 rounded-xl bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900">${esc(suggested.note)}</p>` : ''}
+            <button data-copy-day="${iso}" type="button"
+              class="mt-3 w-full rounded-xl bg-slate-100 px-3 py-2.5 text-xs font-semibold text-slate-700 active:scale-95 transition">
+              ${esc(T.copySuggestion)}
+            </button>
+          </div>
+        </details>
+      </article>` : '';
+
+    /* --- weather guidance, unchanged content, now at the bottom --- */
+    const legend = P ? `
+      <article class="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
+        <p class="text-xs font-bold text-slate-500">${esc(T.planWeatherTitle)}</p>
+        <p class="text-xs leading-relaxed text-slate-600">${esc(P.intro)}</p>
+        ${P.weatherLegend.map((w) => `
+          <div class="flex items-start gap-2 text-xs">
+            <span class="text-base leading-none">${w.icon}</span>
+            <div><span class="font-semibold">${esc(w.when)}</span> — <span class="text-slate-600">${esc(w.ideas)}</span></div>
+          </div>`).join('')}
+      </article>` : '';
+
     $('#view-plans').innerHTML = `
-      ${section(T.planWeatherTitle,
-        `<div class="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
-           <p class="text-xs leading-relaxed text-slate-600">${esc(P.intro)}</p>
-           ${legend}
-         </div>`)}
-      ${section(T.planDaysTitle, `<div class="space-y-3">${days}</div>`)}
-    `;
+      <div class="stick-below-hdr z-20 -mx-3 bg-slate-100/95 px-3 pt-1 pb-2 backdrop-blur">
+        <div id="plan-rail" class="rail no-scrollbar flex gap-2 overflow-x-auto pb-0.5">${rail}</div>
+      </div>
+      <div class="fade-in space-y-3">
+        ${myPlan}
+        ${suggestion}
+        ${legend}
+      </div>`;
   }
 
   /* ================================================================
-   *  TAB 3 — ATTRACTION BANK
+   *  TAB 3 — JOURNEY LOG
+   * ================================================================ */
+  function renderJourney() {
+    const visited = state.entries.filter((e) => e.status === 'visited');
+    const dated = visited.filter((e) => e.date);
+    const undated = visited.filter((e) => !e.date);
+
+    // Newest first — the journey reads as a log you scroll back through.
+    const byDate = [...new Set(dated.map((e) => e.date))].sort().reverse();
+
+    const group = (title, list, iso, hint = '') => `
+      <article class="rounded-2xl bg-white p-4 shadow-sm">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">${esc(title)}</p>
+        ${hint ? `<p class="mt-1 text-[11px] leading-relaxed text-amber-700">${esc(hint)}</p>` : ''}
+        ${iso ? routeBlock(iso, list) : ''}
+        <ul class="mt-3 space-y-2">${list.map((e) => entryRow(e, { showMove: false })).join('')}</ul>
+      </article>`;
+
+    const groups = byDate
+      .map((iso) => group(fmtDate(iso), dated.filter((e) => e.date === iso), iso))
+      .join('');
+
+    const summary = visited.length
+      ? `<p class="px-1 text-xs text-slate-500">${esc(fmt('journeySummary', {
+          places: visited.length, days: byDate.length + (undated.length ? 1 : 0),
+        }))}</p>`
+      : '';
+
+    $('#view-journey').innerHTML = `
+      <div class="fade-in space-y-3">
+        <div class="flex items-center justify-between gap-2 px-1">
+          <h2 class="text-sm font-bold text-slate-500">${esc(T.journeyTitle)}</h2>
+          <button data-add-manual="" data-journey-add type="button"
+            class="rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white shadow-sm active:scale-95 transition">
+            ${esc(T.journeyAdd)}
+          </button>
+        </div>
+        ${summary}
+        ${visited.length ? '' : `<p class="rounded-2xl bg-white p-8 text-center text-sm leading-relaxed text-slate-500 shadow-sm">${esc(T.journeyEmpty)}</p>`}
+        ${groups}
+        ${undated.length ? group(T.journeyNoDate, undated, null, T.journeyNoDateHint) : ''}
+      </div>`;
+  }
+
+  /* ================================================================
+   *  TAB 4 — ATTRACTION BANK
    * ================================================================ */
   function buildFilterRails() {
     // categories
@@ -432,16 +996,22 @@
         <button data-region="${r.id}" type="button"
           class="seg-btn rounded-md px-2.5 py-1 font-medium transition">${esc(r.label)}</button>`).join('');
 
-    // favorite / done status segmented control
+    // favorite / planned / done status segmented control
     $('#status-rail').innerHTML = [
       { id: 'all', label: T.statusAll },
       { id: 'fav', label: T.statusFav },
+      { id: 'planned', label: T.statusPlanned },
       { id: 'todo', label: T.statusTodo },
       { id: 'done', label: T.statusDone },
     ].map((s) => `
       <button data-status="${s.id}" type="button"
         class="seg-btn rounded-md px-2.5 py-1 font-medium transition">${s.label}</button>`).join('');
   }
+
+  /** iOS Safari draws no clear button inside type="search", so we supply one. */
+  const syncClearSearch = () => {
+    $('#btn-clear-search').hidden = state.query === '';
+  };
 
   function paintFilterState() {
     document.querySelectorAll('.cat-chip').forEach((b) => {
@@ -456,9 +1026,18 @@
     });
     seg('[data-weather]', 'weather');
     seg('[data-region]', 'region');
-    seg('[data-status]', 'status');
+    // Status is multi-select, so it can't use seg(): "הכול" lights up only when
+    // nothing is chosen, and several pills can be lit at once.
+    document.querySelectorAll('[data-status]').forEach((b) => {
+      const id = b.dataset.status;
+      const on = id === 'all' ? state.statuses.size === 0 : state.statuses.has(id);
+      b.className = `seg-btn rounded-md px-2.5 py-1 font-medium transition ${
+        on ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`;
+      b.setAttribute('aria-pressed', String(on));
+    });
     $('#priority').value = String(state.minRank);
     $('#search').value = state.query;
+    syncClearSearch();
 
     // Pinned clear-categories button: visible only when a category is active,
     // so a selection scrolled off the (RTL) rail's edge is always clearable.
@@ -478,9 +1057,11 @@
       // 'any'-weather items always pass a sun/rain filter — they work either way.
       if (state.weather !== 'all' && a.weather !== state.weather && a.weather !== 'any') return false;
       if (state.region !== 'all' && a.region !== state.region) return false;
-      if (state.status === 'fav' && !state.favorites.has(a.id)) return false;
-      if (state.status === 'todo' && state.done.has(a.id)) return false;
-      if (state.status === 'done' && !state.done.has(a.id)) return false;
+      // Status filters are ANDed: ⭐ + ○ means "favorites I haven't done yet".
+      if (state.statuses.has('fav') && !state.favorites.has(a.id)) return false;
+      if (state.statuses.has('planned') && !state.plannedRefs.has(a.id)) return false;
+      if (state.statuses.has('todo') && state.visitedRefs.has(a.id)) return false;
+      if (state.statuses.has('done') && !state.visitedRefs.has(a.id)) return false;
       if (rankOf(a) < state.minRank) return false;
       if (terms.length) {
         const hay = [
@@ -518,7 +1099,7 @@
     const cat = CAT.get(a.category);
     const prio = PRIO.get(a.priority);
     const isFav = state.favorites.has(a.id);
-    const isDone = state.done.has(a.id);
+    const isDone = state.visitedRefs.has(a.id);
     const tags = (a.tags || []).slice(0, 4)
       .map((t) => `<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">${esc(trTag(t))}</span>`)
       .join('');
@@ -540,6 +1121,7 @@
           ${chip(esc(prio?.label ?? a.priority), PRIO_STYLE[a.priority] || PRIO_STYLE.optional)}
           ${chip(`${WEATHER_ICON[a.weather]} ${WEATHER_TEXT[a.weather]}`, 'bg-sky-50 text-sky-700 ring-sky-200')}
           ${chip(`⏱ ${esc(trDuration(a.duration))}`)}
+          ${timelineChips(a.id)}
         </div>
 
         <p class="mt-2.5 text-sm leading-relaxed text-slate-600">${esc(a.description)}</p>
@@ -552,17 +1134,37 @@
             ${favBtnHtml(a.id)}
             ${doneBtnHtml(a.id)}
           </div>
+          <button data-plan="${a.id}" type="button"
+            class="w-full rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 active:scale-95 transition">
+            ➕ ${esc(T.planAdd)}
+          </button>
         </div>
       </article>`;
   }
 
-  /** Repaint a single card's favorite/done state in place, so a tap doesn't
+  /** Chips telling you this place is already on the timeline, so you don't plan
+   *  the same coaster twice. Dates come straight off the entries. */
+  function timelineChips(id) {
+    const mine = state.entries.filter((e) => e.ref === id);
+    if (!mine.length) return '';
+    const visited = mine.filter((e) => e.status === 'visited');
+    const planned = mine.filter((e) => e.status === 'planned');
+    const label = (e) => (e.date ? fmtDayShort(e.date) : T.journeyNoDate) + (e.time ? ` ${e.time}` : '');
+    return [
+      ...visited.map((e) => chip(esc(fmt('cardVisited', { date: label(e) })),
+        'bg-emerald-50 text-emerald-700 ring-emerald-200')),
+      ...planned.map((e) => chip(esc(fmt('cardPlanned', { date: label(e) })),
+        'bg-sky-50 text-sky-700 ring-sky-200')),
+    ].join('');
+  }
+
+  /** Repaint a single card's favorite state in place, so a tap doesn't
    *  re-render (and collapse) the whole list. */
   function paintCardState(id) {
     const art = document.querySelector(`#attraction-list [data-id="${id}"]`);
     if (!art) return;
     const isFav = state.favorites.has(id);
-    const isDone = state.done.has(id);
+    const isDone = state.visitedRefs.has(id);
     const favBtn = art.querySelector('[data-fav]');
     const doneBtn = art.querySelector('[data-done]');
     if (favBtn) favBtn.outerHTML = favBtnHtml(id);
@@ -657,6 +1259,7 @@
     state.tab = tab;
     $('#view-itinerary').hidden = tab !== 'itinerary';
     $('#view-plans').hidden = tab !== 'plans';
+    $('#view-journey').hidden = tab !== 'journey';
     $('#view-attractions').hidden = tab !== 'attractions';
     document.querySelectorAll('.tab-btn').forEach((b) => {
       const on = b.dataset.tab === tab;
@@ -676,8 +1279,16 @@
     let searchTimer;
     $('#search').addEventListener('input', (e) => {
       state.query = e.target.value;
+      syncClearSearch();
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => { renderAttractions(); persist(); }, 120);
+    });
+
+    $('#btn-clear-search').addEventListener('click', () => {
+      state.query = '';
+      paintFilterState();
+      $('#search').focus(); // keep the keyboard up — usually you're retyping
+      renderAttractions(); persist();
     });
 
     $('#cat-rail').addEventListener('click', (e) => {
@@ -710,7 +1321,15 @@
     $('#status-rail').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-status]');
       if (!btn) return;
-      state.status = btn.dataset.status;
+      const id = btn.dataset.status;
+      if (id === 'all') {
+        state.statuses.clear();
+      } else {
+        state.statuses.has(id) ? state.statuses.delete(id) : state.statuses.add(id);
+        // "טרם בוצע" and "בוצע" contradict each other — picking one drops the other.
+        if (id === 'todo') state.statuses.delete('done');
+        if (id === 'done') state.statuses.delete('todo');
+      }
       paintFilterState(); renderAttractions(); persist();
     });
 
@@ -719,23 +1338,158 @@
       renderAttractions(); persist();
     });
 
-    // Favorite / Done toggles (delegated). Repaint just the tapped card so open
-    // navigation menus on other cards aren't disturbed.
+    // Favorite / visit / plan (delegated). Favorites repaint just the tapped card
+    // so open navigation menus on other cards aren't disturbed; the other two open
+    // the sheet, which re-renders everything on save anyway.
     $('#attraction-list').addEventListener('click', (e) => {
       const favBtn = e.target.closest('[data-fav]');
       const doneBtn = e.target.closest('[data-done]');
+      const planBtn = e.target.closest('[data-plan]');
       if (favBtn) {
         const id = favBtn.dataset.fav;
         state.favorites.has(id) ? state.favorites.delete(id) : state.favorites.add(id);
         persist();
         // Under an active status filter the card may need to leave the list.
-        state.status === 'all' ? paintCardState(id) : renderAttractions();
+        state.statuses.size === 0 ? paintCardState(id) : renderAttractions();
       } else if (doneBtn) {
         const id = doneBtn.dataset.done;
-        state.done.has(id) ? state.done.delete(id) : state.done.add(id);
-        persist();
-        state.status === 'all' ? paintCardState(id) : renderAttractions();
+        // Already logged? Open that entry for editing rather than silently
+        // destroying a note with a stray tap.
+        const logged = state.entries.find((x) => x.ref === id && x.status === 'visited');
+        openSheet(logged ? { entryId: logged.id } : { ref: id, mode: 'visited' });
+      } else if (planBtn) {
+        openSheet({ ref: planBtn.dataset.plan, mode: 'planned', date: activeDay() });
       }
+    });
+
+    /* ---- planner + journey (delegated on the two view containers) ---- */
+    const timelineClicks = (e) => {
+      const hit = (attr) => e.target.closest(`[${attr}]`);
+
+      const day = hit('data-plan-day');
+      if (day) {
+        state.planDay = day.dataset.planDay;
+        persist(); renderPlanner();
+        return;
+      }
+
+      const edit = hit('data-entry-edit');
+      if (edit) { openSheet({ entryId: edit.dataset.entryEdit }); return; }
+
+      const visit = hit('data-entry-visit');
+      if (visit) {
+        const entry = findEntry(visit.dataset.entryVisit);
+        if (entry) {
+          entry.status = 'visited';
+          if (!entry.time) entry.time = hhmmNow(); // stamp when it actually happened
+          reindex(); persist();
+          toast(T.markedVisited);
+          renderPlanner(); renderJourney(); renderAttractions();
+        }
+        return;
+      }
+
+      const unvisit = hit('data-entry-unvisit');
+      if (unvisit) {
+        const entry = findEntry(unvisit.dataset.entryUnvisit);
+        if (entry) {
+          entry.status = 'planned';
+          reindex(); persist();
+          toast(T.backToPlan);
+          renderPlanner(); renderJourney(); renderAttractions();
+        }
+        return;
+      }
+
+      const up = hit('data-entry-up');
+      const down = hit('data-entry-down');
+      if (up || down) {
+        moveEntry((up || down).dataset[up ? 'entryUp' : 'entryDown'], up ? -1 : 1);
+        persist(); renderPlanner(); renderJourney();
+        return;
+      }
+
+      const sort = hit('data-sort-day');
+      if (sort) {
+        sortDayByTime(sort.dataset.sortDay);
+        persist(); renderPlanner();
+        toast(T.sortedByTime);
+        return;
+      }
+
+      const manual = hit('data-add-manual');
+      if (manual) {
+        openSheet({
+          custom: true,
+          date: manual.dataset.addManual || activeDay(),
+          // The journey's own add button logs a visit; the planner's plans one.
+          mode: manual.hasAttribute('data-journey-add') ? 'visited' : 'planned',
+        });
+        return;
+      }
+
+      if (hit('data-route-hotel')) {
+        state.routeFromHotel = !state.routeFromHotel;
+        persist(); renderPlanner(); renderJourney();
+        return;
+      }
+
+      if (hit('data-goto-bank')) { setTab('attractions'); return; }
+
+      const copy = hit('data-copy-day');
+      if (copy) {
+        const iso = copy.dataset.copyDay;
+        const suggested = D.plans?.days?.find((d) => d.date === iso);
+        // Only steps that point at a real attraction can become entries; the
+        // free-text ones ("drive west, coffee on the way") have nowhere to go.
+        const refs = (suggested?.steps || [])
+          .filter((s) => s.ref && ATTR.has(s.ref))
+          .filter((s) => !state.entries.some((x) => x.ref === s.ref && x.date === iso));
+        if (!refs.length) { toast(T.copiedNothing); return; }
+        refs.forEach((s) => addEntry({ ref: s.ref, date: iso, status: 'planned' }));
+        persist();
+        toast(fmt('copiedSuggestion', { n: refs.length }));
+        renderPlanner(); renderAttractions();
+      }
+    };
+    $('#view-plans').addEventListener('click', timelineClicks);
+    $('#view-journey').addEventListener('click', timelineClicks);
+
+    /* ---- sheet ---- */
+    $('#sheet-close').addEventListener('click', closeSheet);
+    $('#sheet-backdrop').addEventListener('click', closeSheet);
+    $('#sheet-save').addEventListener('click', saveSheet);
+    $('#sheet-delete').addEventListener('click', deleteFromSheet);
+    $('#sheet-date').addEventListener('change', paintSheet);
+    $('#sheet').addEventListener('click', (e) => {
+      const mode = e.target.closest('[data-sheet-mode]');
+      if (mode) {
+        sheetCtx.mode = mode.dataset.sheetMode;
+        // Logging a visit wants a clock time; planning usually doesn't.
+        if (sheetCtx.mode === 'visited' && !$('#sheet-time').value) $('#sheet-time').value = hhmmNow();
+        paintSheet();
+        return;
+      }
+      const day = e.target.closest('[data-sheet-day]');
+      if (day) { $('#sheet-date').value = day.dataset.sheetDay; paintSheet(); }
+    });
+    // Pasting a link is the moment to tell the user what we could read from it.
+    $('#sheet-link').addEventListener('change', () => {
+      const parsed = parseMapsLink($('#sheet-link').value);
+      const help = $('#sheet-link-help');
+      if (parsed.name && !$('#sheet-name').value.trim()) {
+        $('#sheet-name').value = parsed.name;
+        help.textContent = fmt('sheetLinkParsedName', { name: parsed.name });
+      } else if (parsed.coords) {
+        help.textContent = T.sheetLinkParsedCoords;
+      } else if (parsed.url) {
+        help.textContent = T.sheetLinkShort;
+      } else {
+        help.textContent = T.sheetLinkHelp;
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !sheetEl().hidden) closeSheet();
     });
 
     $('#btn-nearby').addEventListener('click', findNearby);
@@ -745,7 +1499,7 @@
       state.categories.clear();
       state.weather = 'all';
       state.region = 'all';
-      state.status = 'all';
+      state.statuses.clear();
       state.minRank = 1;
       paintFilterState(); renderAttractions(); persist();
     });
@@ -755,7 +1509,8 @@
   restore();
   renderHeader();
   renderItinerary();
-  renderPlans();
+  renderPlanner();
+  renderJourney();
   buildFilterRails();
   paintFilterState();
   renderAttractions();
@@ -774,7 +1529,10 @@
   window.addEventListener('orientationchange', () => setTimeout(syncHeaderOffset, 250));
 
   // Handy for debugging from a phone console; not used by the app itself.
-  window.__TRIP = { state, computeList, haversine, renderAttractions, navUrl };
+  window.__TRIP = {
+    state, computeList, haversine, renderAttractions, destStr, gmapsUrl,
+    tripDays, hotelOn, parseMapsLink, routeUrl, dayEntries, renderPlanner, renderJourney,
+  };
 
   // Offline support. Needs https (GitLab Pages is fine); silently skipped
   // on file:// so local previews still work.
