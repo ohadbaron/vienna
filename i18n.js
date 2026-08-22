@@ -76,7 +76,7 @@ window.I18N = {
     entryOpenLink: 'הקישור שהדבקתי',
     // A short maps.app.goo.gl link carries no coordinates, and it can't be
     // expanded offline — so the day route has nothing to aim at but the name.
-    entryLinkNoCoords: '⚠️ הקישור הזה אטום (maps.app.goo.gl) — לא ניתן לחלץ ממנו מיקום, ולכן הניווט יחפש לפי השם. הקישו ✎ והדביקו קואורדינטות או קישור ארוך.',
+    entryLinkNoCoords: 'הקישור המקוצר לא מכיל מיקום, לכן הניווט מחפש את השם שלמעלה. אם גוגל לא מזהה אותו — הקישו ✎ ורשמו כתובת מלאה או הדביקו קואורדינטות.',
 
     /* ---- add / edit sheet ----
      * Only strings app.js writes at runtime live here; the sheet's static labels
@@ -92,7 +92,7 @@ window.I18N = {
     sheetNeedsDate: 'צריך לבחור תאריך.',
     sheetLinkParsedName: '✓ מהקישור זוהה: {name} — מסלול היום ינווט לזה.',
     sheetLinkParsedCoords: '✓ זוהה מיקום מדויק — מסלול היום ינווט אליו.',
-    sheetLinkShort: '⚠️ הקישור הזה לא מכיל מיקום (קישורי maps.app.goo.gl שומרים אותו בשרת של גוגל, ואי אפשר לפתוח אותם ללא אינטרנט). הרשומה תישמר והקישור ייפתח בלחיצה — אבל מסלול היום יחפש לפי השם. לדיוק: ב-Google Maps פתחו את המקום, גללו מטה עד לקואורדינטות, הקישו עליהן להעתקה והדביקו כאן. או: לחיצה ארוכה על המפה יוצרת סימון שמציג קואורדינטות.',
+    sheetLinkShort: 'הקישור הזה לא מכיל את המיקום — קישורי maps.app.goo.gl שומרים אותו אצל גוגל, ואי אפשר לפתוח אותם ללא אינטרנט. זה בסדר: הקישור יישמר וייפתח בלחיצה, והניווט יחפש לפי השם שתרשמו. כדי שהניווט יהיה מדויק, רשמו בשדה השם שם או כתובת שגוגל מזהה (למשל "Marko-Feingold-Steg, Salzburg"), או הדביקו כאן קואורדינטות.',
 
     /* ---- toasts ---- */
     addedToPlan: 'נוסף לתכנית · {date}',

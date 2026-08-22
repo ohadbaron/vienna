@@ -14,7 +14,7 @@
   const STORE_KEY = 'austria26.state.v1';
   // Shown in the footer so you can tell at a glance which build a device is
   // actually running. Bump together with CACHE in sw.js on every deploy.
-  const APP_VERSION = '8';
+  const APP_VERSION = '9';
 
   /** Fill {token} placeholders in a UI string, e.g. fmt('nights', {n: 3}). */
   const fmt = (key, vals = {}) =>
@@ -604,7 +604,7 @@
     $('#sheet-manual').hidden = !manual;
     $('#sheet-name').value = manual && place ? place.name || '' : '';
     $('#sheet-link').value = manual && place ? place.url || '' : '';
-    $('#sheet-link-help').textContent = T.sheetLinkHelp;
+    syncLinkHelp();
 
     // Date: today if it falls inside the trip, otherwise day one.
     const days = tripDays();
@@ -631,6 +631,24 @@
     sheetEl().hidden = true;
     $('#sheet-backdrop').hidden = true;
     document.body.style.overflow = '';
+  }
+
+  /** Report what we could read out of the link field, and offer a way out when
+   *  the answer is "nothing". Called on every keystroke and when the sheet opens,
+   *  so editing an existing entry shows the same verdict as pasting did. */
+  function syncLinkHelp() {
+    const parsed = parseMapsLink($('#sheet-link').value);
+    const help = $('#sheet-link-help');
+    const open = $('#sheet-link-open');
+    if (parsed.name && !$('#sheet-name').value.trim()) $('#sheet-name').value = parsed.name;
+    if (parsed.coords) help.textContent = T.sheetLinkParsedCoords;
+    else if (parsed.name) help.textContent = fmt('sheetLinkParsedName', { name: parsed.name });
+    else if (parsed.url) help.textContent = T.sheetLinkShort;
+    else help.textContent = T.sheetLinkHelp;
+    // An undecodable link is a dead end unless we offer a route out of it.
+    const opaque = !!parsed.url && !parsed.coords && !parsed.name;
+    open.hidden = !opaque;
+    if (opaque) open.href = parsed.url;
   }
 
   /** Repaint the two bits of the sheet that depend on live choices: the
@@ -883,16 +901,16 @@
             ${latinSub(place.nameLatin)}
             ${e.custom ? `<p class="text-[10px] text-slate-400">${esc(T.entryManual)}</p>` : ''}
             ${e.custom ? (() => {
-              // Show what navigation will actually aim at whenever it differs from
-              // the label — that's the question a pasted link raises, and seeing
-              // the answer beats guessing. Warn only if the link gave us nothing.
-              const q = linkQuality(e.custom);
+              // Always show what navigation will actually aim at — that's the
+              // question a pasted link raises, and seeing the answer beats
+              // guessing. An opaque link isn't a failure, it just means the aim
+              // is the name, so say so plainly instead of raising an alarm.
               const target = routePoint(entryPlace(e));
-              const shown = target && target !== e.custom.name
+              const aim = target
                 ? `<p class="mt-1 text-[10px] text-slate-400" dir="auto">🧭 ${esc(target)}</p>` : '';
-              return q === 'nothing'
-                ? `<p class="mt-1 text-[10px] leading-relaxed text-amber-700">${esc(T.entryLinkNoCoords)}</p>`
-                : shown;
+              const hint = linkQuality(e.custom) === 'nothing'
+                ? `<p class="text-[10px] leading-relaxed text-amber-700">${esc(T.entryLinkNoCoords)}</p>` : '';
+              return aim + hint;
             })() : ''}
             ${e.note ? `<p class="mt-1 rounded-lg bg-slate-50 p-2 text-xs leading-relaxed text-slate-600">${esc(e.note)}</p>` : ''}
           </div>
@@ -1683,15 +1701,6 @@
     // React on `input`, not just `change`: `change` only fires on blur, so pasting
     // and going straight for Save left the default help text on screen — which
     // reads like a failure even when the link parsed fine.
-    const syncLinkHelp = () => {
-      const parsed = parseMapsLink($('#sheet-link').value);
-      const help = $('#sheet-link-help');
-      if (parsed.name && !$('#sheet-name').value.trim()) $('#sheet-name').value = parsed.name;
-      if (parsed.coords) help.textContent = T.sheetLinkParsedCoords;
-      else if (parsed.name) help.textContent = fmt('sheetLinkParsedName', { name: parsed.name });
-      else if (parsed.url) help.textContent = T.sheetLinkShort;
-      else help.textContent = T.sheetLinkHelp;
-    };
     $('#sheet-link').addEventListener('input', syncLinkHelp);
     $('#sheet-link').addEventListener('change', syncLinkHelp);
     document.addEventListener('keydown', (e) => {
