@@ -14,7 +14,7 @@
   const STORE_KEY = 'austria26.state.v1';
   // Shown in the footer so you can tell at a glance which build a device is
   // actually running. Bump together with CACHE in sw.js on every deploy.
-  const APP_VERSION = '6';
+  const APP_VERSION = '7';
 
   /** Fill {token} placeholders in a UI string, e.g. fmt('nights', {n: 3}). */
   const fmt = (key, vals = {}) =>
@@ -250,63 +250,89 @@
     : { start: null, end: null });
 
   /* ---------------- pasted Google Maps links ---------------- */
-  /** Pull what we can out of whatever the user pasted, offline.
+  /** Pull whatever we can out of what the user pasted, offline.
    *  Returns { name?, coords?, url? } — all optional, any combination.
-   *  A short maps.app.goo.gl link can only be resolved by following a redirect,
-   *  which we can't do offline, so it comes back as { url } and the sheet keeps
-   *  insisting on a name. */
+   *
+   *  Google hands out a lot of shapes and people paste them in a lot of states:
+   *  with the scheme stripped, wrapped in share-sheet text, from the desktop
+   *  address bar, from the mobile app. All of those are worth catching.
+   *
+   *  The one shape that genuinely can't be resolved is a short maps.app.goo.gl /
+   *  goo.gl link: the location lives behind an HTTP redirect, and this app has to
+   *  work offline in an alpine valley. Those come back as { url } with no coords,
+   *  and the UI says so rather than pretending. */
   const parseMapsLink = (raw) => {
     const s = String(raw || '').trim();
     if (!s) return {};
-    const out = {};
-    const isUrl = /^https?:\/\//i.test(s);
-    if (isUrl) out.url = s;
 
-    // "48.2287, 16.3423" typed or pasted straight in.
-    const bare = s.match(/^\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);
+    // Coordinates on their own — typed, or copied from a place's detail sheet.
+    const NUM = String.raw`-?\d{1,3}(?:\.\d+)?`;
+    const bare = s.match(new RegExp(`^(${NUM})\\s*,\\s*(${NUM})$`));
     if (bare) return { coords: { lat: Number(bare[1]), lng: Number(bare[2]) } };
 
-    if (!isUrl) return { name: s };
+    // Find the URL *inside* the text: a share sheet often produces
+    // "Café Central https://maps.app.goo.gl/x", and a retyped link often loses
+    // its scheme. Anchoring on ^https?:// missed both.
+    const found = s.match(
+      /(https?:\/\/\S+|(?:www\.)?google\.[a-z.]+\/maps\S*|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)/i,
+    );
+    if (!found) return { name: s };
 
-    // Place name: /maps/place/Some+Name/@... — the most useful part of a long link.
-    const place = s.match(/\/maps\/place\/([^/@?]+)/);
-    if (place) {
-      try {
-        const name = decodeURIComponent(place[1].replace(/\+/g, ' ')).trim();
-        if (name) out.name = name;
-      } catch (_) { /* malformed %-escape — just skip the name */ }
+    const url = /^https?:\/\//i.test(found[1]) ? found[1] : `https://${found[1]}`;
+    const lead = s.slice(0, found.index).trim(); // text the share sheet put in front
+    const out = { url };
+
+    const dec = (v) => {
+      try { return decodeURIComponent(v.replace(/\+/g, ' ')).trim(); } catch (_) { return v.trim(); }
+    };
+    const coordFrom = (re) => {
+      const m = url.match(re);
+      return m ? { lat: Number(m[1]), lng: Number(m[2]) } : null;
+    };
+
+    // Most precise first: the pin recorded in data=, then an explicit ll/center,
+    // then the viewport centre, then a q=/daddr= pair, then coordinates sitting
+    // in the path.
+    out.coords =
+      coordFrom(new RegExp(`!3d(${NUM})!4d(${NUM})`))
+      || coordFrom(new RegExp(`[?&](?:ll|sll|center)=(${NUM}),(${NUM})`, 'i'))
+      || coordFrom(new RegExp(`@(${NUM}),(${NUM})`))
+      || coordFrom(new RegExp(`[?&](?:q|query|destination|daddr)=(${NUM}),(${NUM})`, 'i'))
+      || coordFrom(new RegExp(`/maps/(?:place/|dir/|search/)?/*(${NUM}),(${NUM})`))
+      || null;
+    if (!out.coords) delete out.coords;
+
+    // Name: /maps/place/<name> is the good one; ?q=/?query= is the fallback.
+    let name = '';
+    const place = url.match(/\/maps\/place\/([^/@?#]+)/);
+    if (place) name = dec(place[1]);
+    if (!name) {
+      const q = url.match(/[?&](?:q|query)=([^&]+)/);
+      if (q) name = dec(q[1]);
     }
+    // A coordinate pair or a place_id blob is not a name a human wants to read.
+    if (new RegExp(`^${NUM}\\s*,\\s*${NUM}$`).test(name) || /^(?:place_id:|ftid=)/i.test(name)) name = '';
+    if (!name && lead) name = lead;
+    if (name) out.name = name;
 
-    // Coordinates: @lat,lng,zoom is the viewport; !3dlat!4dlng is the actual pin,
-    // so prefer the pin when both are present.
-    const pin = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-    const at = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    const hit = pin || at;
-    if (hit) out.coords = { lat: Number(hit[1]), lng: Number(hit[2]) };
-
-    // ?q= / ?query= / ?destination= carry either coordinates or a name.
-    const q = s.match(/[?&](?:q|query|destination|daddr)=([^&]+)/);
-    if (q) {
-      let val = q[1];
-      try { val = decodeURIComponent(val.replace(/\+/g, ' ')); } catch (_) { /* keep raw */ }
-      const qc = val.match(/^\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);
-      if (qc) out.coords = out.coords || { lat: Number(qc[1]), lng: Number(qc[2]) };
-      else if (!out.name && val.trim()) out.name = val.trim();
-    }
     return out;
   };
 
   /** Build the { name, navQuery, url, coords } shape the rest of the app treats
-   *  like a data.js place — so destStr() and every nav link work unchanged. */
+   *  like a data.js place — so destStr() and every nav link work unchanged.
+   *
+   *  `name` and `navQuery` are deliberately allowed to differ: you might label a
+   *  place "הגשר" while the link carries "Marko-Feingold-Steg, 5020 Salzburg,
+   *  Austria". The label is for reading, the address is for Maps — so the link's
+   *  text wins for navigation even when you typed your own name. */
   const makeCustom = (name, link) => {
     const parsed = parseMapsLink(link);
     const pin = parsed.coords ? `${parsed.coords.lat},${parsed.coords.lng}` : '';
-    const label = (name || '').trim() || parsed.name || pin;
+    const typed = (name || '').trim();
     return {
-      name: label,
-      // navQuery is what destStr() will use for a name search.
-      navQuery: label,
-      // A pasted URL is the most precise thing we have; keep it for the direct
+      name: typed || parsed.name || pin,
+      navQuery: parsed.name || typed || pin,
+      // The pasted URL is the most precise thing we hold; keep it for the direct
       // "open the link I pasted" button on the row.
       url: parsed.url || '',
       coords: parsed.coords || null,

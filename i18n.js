@@ -76,7 +76,7 @@ window.I18N = {
     entryOpenLink: 'הקישור שהדבקתי',
     // A short maps.app.goo.gl link carries no coordinates, and it can't be
     // expanded offline — so the day route has nothing to aim at but the name.
-    entryLinkNoCoords: '⚠️ מהקישור המקוצר לא הצלחנו לחלץ מיקום, ולכן מסלול היום יחפש לפי השם. הקישו ✎ והדביקו קישור ארוך (google.com/maps/place/…) או קואורדינטות.',
+    entryLinkNoCoords: '⚠️ מהקישור לא הצלחנו לחלץ מיקום, ולכן מסלול היום יחפש לפי השם. הקישו ✎ והדביקו קואורדינטות (או קישור ארוך מ-google.com/maps/place/…).',
 
     /* ---- add / edit sheet ----
      * Only strings app.js writes at runtime live here; the sheet's static labels
@@ -87,12 +87,12 @@ window.I18N = {
     sheetEdit: 'עריכת רשומה',
     sheetModePlanned: '🗓️ מתוכנן',
     sheetModeVisited: '📖 היינו שם',
-    sheetLinkHelp: 'קישור ארוך → נחלץ ממנו מיקום מדויק למסלול היום. קישור מקוצר (maps.app.goo.gl) לא ניתן לפענוח — הדביקו קישור ארוך או קואורדינטות.',
+    sheetLinkHelp: 'אפשר להדביק קישור מ-Google Maps או קואורדינטות (48.2104, 16.3658). קישור מקוצר מסוג maps.app.goo.gl לא מכיל מיקום — עדיף קישור ארוך או קואורדינטות.',
     sheetNeedsName: 'צריך למלא שם מקום.',
     sheetNeedsDate: 'צריך לבחור תאריך.',
-    sheetLinkParsedName: 'זוהה מהקישור: {name}',
+    sheetLinkParsedName: '✓ מהקישור זוהה: {name} — מסלול היום ינווט לזה.',
     sheetLinkParsedCoords: '✓ זוהה מיקום מדויק — מסלול היום ינווט אליו.',
-    sheetLinkShort: '⚠️ קישור מקוצר — לא ניתן לפענח אותו במצב לא מקוון. הוא יישמר ויפתח כמו שהוא, אבל מסלול היום יחפש לפי השם. לדיוק: הדביקו קישור ארוך או קואורדינטות.',
+    sheetLinkShort: '⚠️ הקישור הזה לא מכיל מיקום (קישורי maps.app.goo.gl שומרים אותו בשרת של גוגל, ואי אפשר לפתוח אותם ללא אינטרנט). הרשומה תישמר והקישור ייפתח בלחיצה — אבל מסלול היום יחפש לפי השם. לדיוק: ב-Google Maps פתחו את המקום, גללו מטה עד לקואורדינטות, הקישו עליהן להעתקה והדביקו כאן. או: לחיצה ארוכה על המפה יוצרת סימון שמציג קואורדינטות.',
 
     /* ---- toasts ---- */
     addedToPlan: 'נוסף לתכנית · {date}',
